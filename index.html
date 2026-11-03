@@ -897,7 +897,7 @@ function slimTm(path,j){
   if(path.endsWith("/credits"))return{cast:(j.cast||[]).slice(0,3).map(c=>({id:c.id,name:c.name}))};
   return{overview:j.overview,title:j.title,name:j.name,release_date:j.release_date,first_air_date:j.first_air_date,runtime:j.runtime,
     genres:(j.genres||[]).map(g=>({name:g.name})),episode_run_time:j.episode_run_time,number_of_episodes:j.number_of_episodes,
-    last_episode_to_air:j.last_episode_to_air?{runtime:j.last_episode_to_air.runtime}:null,
+    last_episode_to_air:j.last_episode_to_air?{runtime:j.last_episode_to_air.runtime,season_number:j.last_episode_to_air.season_number,episode_number:j.last_episode_to_air.episode_number}:null,
     next_episode_to_air:j.next_episode_to_air?{runtime:j.next_episode_to_air.runtime}:null,
     seasons:(j.seasons||[]).map(x=>({season_number:x.season_number,episode_count:x.episode_count})),
     vote_average:j.vote_average,vote_count:j.vote_count};
@@ -1294,11 +1294,11 @@ function renderEpisodes(s,sn,eps,body,meta){
     body.appendChild(row);
   });
 }
-async function tvRun(link,box,btn){
+async function tvRun(link,box,btn,label2){
   if(tvHttp){
     const w=window.open("http://"+tvHttp+"?u="+encodeURIComponent(link),"_blank");
     const label=btn.dataset.label||(btn.dataset.label=btn.textContent);
-    btn.textContent=w?"Odesláno":"Povol vyskakovací okna";setTimeout(()=>{btn.textContent=label},2000);
+    btn.textContent=w?"Odesláno"+(label2?" "+label2:""):"Povol vyskakovací okna";setTimeout(()=>{btn.textContent=label},2000);
     return;
   }
   if(!tvAddr){if(await openPanel("#tv")){$("#tvIn").value="";$("#tvHttpIn").value=tvHttp}return}
@@ -1307,9 +1307,28 @@ async function tvRun(link,box,btn){
   box.textContent=cmd;box.hidden=false;
   try{await navigator.clipboard.writeText(cmd);btn.textContent="Zkopírováno";setTimeout(()=>{btn.textContent=label},2000)}catch(e){}
 }
+function nextEp(s){
+  let sn=1,ep=1;
+  const d=s.tmdbId&&cget("tm:"+s.tmdbId+"?"+JSON.stringify({language:"cs-CZ"}));
+  if(d&&d.seasons&&tkEps[s.imdbId]){
+    const last=d.last_episode_to_air&&d.last_episode_to_air.season_number?[d.last_episode_to_air.season_number,d.last_episode_to_air.episode_number]:null;
+    const seasons=d.seasons.filter(x=>x.season_number>0&&x.episode_count>0).sort((a,b)=>a.season_number-b.season_number);
+    let found=null;
+    outer:for(const x of seasons){
+      for(let n=1;n<=x.episode_count;n++){
+        if(last&&(x.season_number>last[0]||(x.season_number===last[0]&&n>last[1])))break outer;
+        if(!epHas(s.imdbId,x.season_number+":"+n)){found=[x.season_number,n];break outer}
+      }
+    }
+    if(found){sn=found[0];ep=found[1]}
+  }
+  return{sn,ep};
+}
 function tvShow(s,box,btn){
   const id=s.imdbId,isTv=(s.showType==="series"||type==="series");
-  return tvRun(isTv?"stremio:///detail/series/"+id+"/"+id+":1:1":"stremio:///detail/movie/"+id+"/"+id,box,btn);
+  if(!isTv)return tvRun("stremio:///detail/movie/"+id+"/"+id,box,btn);
+  const {sn,ep}=nextEp(s);
+  return tvRun("stremio:///detail/series/"+id+"/"+id+":"+sn+":"+ep,box,btn,"S"+sn+"E"+ep);
 }
 const lazyIO=("IntersectionObserver" in window)?new IntersectionObserver(es=>es.forEach(e=>{
   if(e.isIntersecting){lazyIO.unobserve(e.target);const f=e.target._lazy;e.target._lazy=null;if(f)f()}
