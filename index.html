@@ -36,6 +36,8 @@ body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Source Sans 
 .thbtn{width:42px;height:42px;padding:0;border-radius:50%;font-size:1.25rem;line-height:1;flex:none}
 h1{font:800 2.1rem/1 "Bricolage Grotesque",sans-serif;margin:8px 0 16px;letter-spacing:-.02em}
 .bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+.setbtn{margin-left:auto}
+@media (max-width:350px){.topbar h1{font-size:1.7rem}.topbar .brand{gap:8px}.topbar .logo{width:40px;height:40px}}
 button,select,input{font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px}
 button{cursor:pointer}
 button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
@@ -203,10 +205,10 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
 <div class="bar">
   <button id="tMovie" aria-pressed="true">Filmy</button>
   <button id="tTv" aria-pressed="false">Seriály</button>
-  <button id="tWl" aria-pressed="false">Seznamy</button>
   <button id="dubOnly" aria-pressed="true">Jen s dabingem</button>
+  <button id="tWl" aria-pressed="false">Seznamy</button>
   <button id="fBtn" aria-expanded="false" aria-controls="flt" aria-pressed="false">Filtry</button>
-  <button id="setBtn" aria-expanded="false" aria-controls="settings">Nastavení</button>
+  <button id="setBtn" class="thbtn setbtn" aria-expanded="false" aria-controls="settings" aria-label="Nastavení" title="Nastavení"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
 </div>
 <div class="bar" id="lsBar" hidden>
   <select id="lsSel" aria-label="Seznam z Traktu"></select>
