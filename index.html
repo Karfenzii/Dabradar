@@ -70,6 +70,9 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 .rev-h{font-weight:600;color:var(--tonalt)}
 .rev-item p{margin:4px 0;color:var(--ink)}
 .rev-item a{font-size:.92rem}
+.rev-act{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.rev-act button{padding:6px 12px;min-height:36px}
+.rev-note{color:var(--mute);flex-basis:100%}
 .trl-box{width:75%;margin:20px auto 10px}
 .trl-box .trl-thumb{margin:0}
 .hint{color:var(--mute);margin:0 0 8px;font-size:.92rem}
@@ -911,6 +914,32 @@ const isCzText=t=>{
   const letters=(t.match(/\p{L}/gu)||[]).length;if(letters<40)return false;
   return (t.match(/[ěščřžýáíéúůďťňó]/gi)||[]).length/letters>0.04;
 };
+const hashStr=t=>{let h=5381;for(let i=0;i<t.length;i++)h=((h<<5)+h+t.charCodeAt(i))|0;return (h>>>0).toString(36)};
+function chunkText(t,max=450){
+  const out=[];let cur="";
+  t.split(/(?<=[.!?…])\s+/).forEach(sn=>{
+    while(sn.length>max){if(cur){out.push(cur);cur=""}out.push(sn.slice(0,max));sn=sn.slice(max)}
+    if((cur+" "+sn).trim().length>max){out.push(cur);cur=sn}else cur=(cur+" "+sn).trim();
+  });
+  if(cur)out.push(cur);
+  return out;
+}
+async function translateCz(text){
+  const key="tr:"+hashStr(text),hit=cget(key);
+  if(hit)return hit;
+  const parts=[];
+  for(const ch of chunkText(text)){
+    const u="https://api.mymemory.translated.net/get?q="+encodeURIComponent(ch)+"&langpair="+encodeURIComponent("Autodetect|cs");
+    const r=await fetch(u);
+    if(!r.ok)throw new Error("limit");
+    const j=await r.json();
+    if(String(j.responseStatus)!=="200"||!j.responseData||!j.responseData.translatedText)throw new Error("limit");
+    parts.push(j.responseData.translatedText);
+  }
+  const out=parts.join(" ");
+  cset(key,out,30*86400e3);
+  return out;
+}
 async function toggleReviews(s,el,btn){
   const old=el.querySelector(".rev");
   if(old){old.remove();return}
@@ -919,20 +948,48 @@ async function toggleReviews(s,el,btn){
   btn.textContent="Načítám…";
   try{
     const d=await tmGet(s.tmdbId+"/reviews",{language:"cs-CZ"});
-    const cz=(d.results||[]).filter(r=>isCzText(r.content))
-      .sort((a,b)=>(b.rating||0)-(a.rating||0)||b.content.length-a.content.length).slice(0,3);
+    const prep=r=>({...r,txt:r.content.replace(/\s+/g," ").trim()});
+    const all=(d.results||[]).map(prep).filter(r=>r.txt.length>=60);
+    const byRate=(a,b)=>(b.rating||0)-(a.rating||0)||b.txt.length-a.txt.length;
+    const cz=all.filter(r=>isCzText(r.txt)).sort(byRate);
+    const foreign=all.filter(r=>!isCzText(r.txt)).sort(byRate);
+    const pick=[...cz.slice(0,3).map(r=>({...r,cz:true}))];
+    foreign.slice(0,3-pick.length).forEach(r=>pick.push({...r,cz:false}));
     const box=document.createElement("div");box.className="rev";
-    if(!cz.length){
-      box.textContent="K tomuto titulu nejsou na TMDB české recenze. Zkus ČSFD.";
-    }else cz.forEach(r=>{
+    if(!pick.length){
+      box.textContent="K tomuto titulu zatím nejsou na TMDB žádné recenze. Zkus ČSFD.";
+    }else pick.forEach(r=>{
       const it=document.createElement("div");it.className="rev-item";
       const h=document.createElement("div");h.className="rev-h";
-      h.textContent=(r.author||"Anonym")+(r.rating?" · "+r.rating+" / 10":"");
+      h.textContent=(r.author||"Anonym")+(r.rating?" · "+r.rating+" / 10":"")+(r.cz?"":" · původně cizojazyčná");
       const t=document.createElement("p");
-      const txt=r.content.replace(/\s+/g," ").trim();
-      t.textContent=txt.length>420?txt.slice(0,420).replace(/\s+\S*$/,"")+"…":txt;
+      const short=r.txt.length>420?r.txt.slice(0,420).replace(/\s+\S*$/,"")+"…":r.txt;
+      t.textContent=short;
       it.appendChild(h);it.appendChild(t);
-      if(r.url){const a=document.createElement("a");a.href=r.url;a.target="_blank";a.rel="noopener";a.textContent="Celá recenze na TMDB";it.appendChild(a)}
+      const row=document.createElement("div");row.className="rev-act";
+      if(!r.cz){
+        const tb=document.createElement("button");tb.textContent="Přeložit do češtiny";
+        let translated=null,showing="orig";
+        tb.onclick=async()=>{
+          if(translated){
+            showing=showing==="orig"?"cz":"orig";
+            t.textContent=showing==="cz"?translated:short;
+            tb.textContent=showing==="cz"?"Zobrazit originál":"Zobrazit překlad";
+            return;
+          }
+          tb.disabled=true;tb.textContent="Překládám…";
+          try{
+            translated=await translateCz(short);showing="cz";
+            t.textContent=translated;tb.textContent="Zobrazit originál";
+            const note=document.createElement("small");note.className="rev-note";note.textContent="Strojový překlad (MyMemory), může být nepřesný.";
+            row.appendChild(note);
+          }catch(e){tb.textContent="Přeložit do češtiny";t.textContent=short;toast("Překlad se nepodařil, nejspíš je vyčerpaný denní limit překladače. Zkus to později.")}
+          tb.disabled=false;
+        };
+        row.appendChild(tb);
+      }
+      if(r.url){const a=document.createElement("a");a.href=r.url;a.target="_blank";a.rel="noopener";a.textContent="Celá recenze na TMDB";row.appendChild(a)}
+      it.appendChild(row);
       box.appendChild(it);
     });
     el.querySelector(".media").prepend(box);
