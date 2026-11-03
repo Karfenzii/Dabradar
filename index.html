@@ -759,6 +759,7 @@ let tvAddr=ls(true,"tvAddr")||"";
 let tvHttp=ls(true,"tvHttp")||"";
 let addons=(ls(true,"addons")||"").split("\n").map(x=>x.trim()).filter(Boolean);
 const addonBase=u=>u.replace(/^stremio:\/\//i,"https://").replace(/\/manifest\.json.*$/i,"").replace(/\/+$/,"");
+const addonQuery=u=>{const m=u.match(/\/manifest\.json(\?.*)?$/i);return m&&m[1]?m[1]:""};
 async function fetchStreams(kind,id){
   const list=[],errs=[];
   await Promise.all(addons.map(async a=>{
@@ -766,7 +767,7 @@ async function fetchStreams(kind,id){
     try{host=new URL(b).hostname}catch(e){}
     const ac=new AbortController(),t=setTimeout(()=>ac.abort(),20000);
     try{
-      const r=await fetch(b+"/stream/"+kind+"/"+id.replace(/[^\w:.\-]/g,"")+".json",{signal:ac.signal});
+      const r=await fetch(b+"/stream/"+kind+"/"+id.replace(/[^\w:.\-]/g,"")+".json"+addonQuery(a),{signal:ac.signal});
       if(!r.ok)throw new Error("HTTP "+r.status);
       const j=await r.json();
       (j.streams||[]).forEach(x=>list.push(Object.assign({},x,{_src:host})));
