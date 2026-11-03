@@ -65,7 +65,7 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 #lbPrev{left:10px;top:50%;transform:translateY(-50%)}
 #lbNext{right:10px;top:50%;transform:translateY(-50%)}
 #lbCnt{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:#fff;font-weight:600;text-shadow:0 1px 6px #000}
-.trl-box{width:50%;margin:20px auto 10px}
+.trl-box{width:75%;margin:20px auto 10px}
 .trl-box .trl-thumb{margin:0}
 .hint{color:var(--mute);margin:0 0 8px;font-size:.92rem}
 .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-top:8px}
@@ -197,6 +197,8 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <button id="tkBtn">Trakt</button>
   <button id="tmBtn">Čeština a galerie</button>
   <button id="tvBtn">Televize</button>
+  <button id="expBtn">Zkopírovat nastavení</button>
+  <button id="impBtn">Vložit nastavení</button>
   <button id="syncBtn">Synchronizovat Trakt</button>
   <button id="thBtn">Vzhled: podle telefonu</button>
   <button id="clr">Vymazat mezipaměť</button>
@@ -224,6 +226,11 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <p style="margin:10px 0 4px;color:var(--mute)">Volitelně: v Termuxu jednou vložte skript a stránka pak bude kopírovat jen krátký příkaz <code>tv adresa odkaz</code>.</p>
   <button id="tvScript">Zkopírovat skript pro Termux</button>
   <button id="tvShort" aria-pressed="false">Krátký příkaz: vypnuto</button>
+</div>
+<div id="imp" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
+  <p style="margin:0 0 4px;color:var(--mute)">Vlož kód nastavení, který ti někdo poslal. Obsahuje klíče Streaming Availability a TMDB a Trakt Client ID. Přihlášení k Traktu si pak uděláš sám v Nastavení, Trakt.</p>
+  <textarea id="impIn" rows="3" placeholder="dabradar:…" autocomplete="off" style="width:100%;margin:6px 0;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px"></textarea>
+  <button id="impGo">Načíst nastavení</button><span id="impMsg" style="margin-left:8px"></span>
 </div>
 <div class="bar">
   <div class="sugwrap"><input id="q" type="search" placeholder="Hledat česky i anglicky (Enter)" aria-label="Hledat podle názvu" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="sug" style="width:100%"><ul id="sug" role="listbox" hidden></ul></div>
@@ -1339,6 +1346,26 @@ document.addEventListener("keydown",e=>{
   },{passive:true});
 })();
 $("#sortSel").onchange=sortList;
+$("#expBtn").onclick=async()=>{
+  const o={sa:KEY,tm:TM,tk:tk.id||""};
+  if(!o.sa&&!o.tm&&!o.tk){toast("Nejdřív zadej aspoň jeden klíč.");return}
+  const code="dabradar:"+btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+  try{await navigator.clipboard.writeText(code);toast("Kód nastavení je zkopírovaný. Pošli ho zprávou jen někomu, komu věříš. Trakt přihlášení v něm není.")}
+  catch(e){window.prompt("Zkopíruj kód nastavení:",code)}
+};
+$("#impBtn").onclick=()=>{const b=$("#imp");b.style.display=b.style.display==="block"?"none":"block";$("#impIn").value="";$("#impMsg").textContent=""};
+$("#impGo").onclick=()=>{
+  const raw=$("#impIn").value.trim().replace(/^dabradar:/,"");
+  try{
+    const o=JSON.parse(decodeURIComponent(escape(atob(raw))));
+    if(typeof o!=="object"||!o)throw 0;
+    if(o.sa)ls(false,"saKey",String(o.sa));
+    if(o.tm)ls(false,"tmdbKey",String(o.tm));
+    if(o.tk){tk.id=String(o.tk);saveTk()}
+    $("#impMsg").textContent="Načteno, obnovuji stránku…";
+    setTimeout(()=>location.reload(),600);
+  }catch(e){$("#impMsg").textContent="Kód se nepodařilo přečíst. Zkopíruj ho celý."}
+};
 $("#syncBtn").onclick=async()=>{
   if(!tk.token){toast("Nejdřív připojte Trakt.");return}
   const b=$("#syncBtn");b.disabled=true;b.textContent="Synchronizuji…";
@@ -1361,7 +1388,7 @@ $("#setBtn").onclick=async()=>{
   if(b.hidden&&!(await askPassword()))return;
   b.hidden=!b.hidden;
   $("#setBtn").setAttribute("aria-expanded",String(!b.hidden));
-  if(b.hidden)["#key","#tm","#tk","#tv"].forEach(x=>{$(x).style.display="none"});
+  if(b.hidden)["#key","#tm","#tk","#tv","#imp"].forEach(x=>{$(x).style.display="none"});
 };
 $("#q").addEventListener("keydown",e=>{
   if(e.key==="Enter"){sugHide();load(true)}
