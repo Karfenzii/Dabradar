@@ -28,7 +28,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Source Sans 3",system-ui,sans-serif;padding:16px;max-width:900px;margin-inline:auto}
-.brand{display:flex;align-items:center;gap:12px}
+.brand{cursor:pointer;display:flex;align-items:center;gap:12px}
 .logo{width:44px;height:44px;flex:none}
 h1{font:800 2.1rem/1 "Bricolage Grotesque",sans-serif;margin:8px 0 16px;letter-spacing:-.02em}
 .bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
@@ -65,6 +65,11 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 #lbPrev{left:10px;top:50%;transform:translateY(-50%)}
 #lbNext{right:10px;top:50%;transform:translateY(-50%)}
 #lbCnt{position:absolute;bottom:14px;left:0;right:0;text-align:center;color:#fff;font-weight:600;text-shadow:0 1px 6px #000}
+.rev{margin:16px 0 8px}
+.rev-item{border-top:1px solid var(--line);padding:10px 0}
+.rev-h{font-weight:600;color:var(--tonalt)}
+.rev-item p{margin:4px 0;color:var(--ink)}
+.rev-item a{font-size:.92rem}
 .trl-box{width:75%;margin:20px auto 10px}
 .trl-box .trl-thumb{margin:0}
 .hint{color:var(--mute);margin:0 0 8px;font-size:.92rem}
@@ -151,7 +156,7 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
 </style>
 </head>
 <body>
-<h1 class="brand"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+<h1 class="brand" id="home" role="button" tabindex="0" title="Zpět na úvodní obrazovku"><svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
 <defs>
 <linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7b5cff"/><stop offset="1" stop-color="#ff5c8a"/></linearGradient>
 <linearGradient id="lg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#17203a"/><stop offset="1" stop-color="#0b111d"/></linearGradient>
@@ -828,6 +833,7 @@ async function seasonToggle(imdb,sn,nums,btn){
 }
 let TM=ls(true,"tmdbKey")||"";
 function slimTm(path,j){
+  if(path.endsWith("/reviews"))return{results:(j.results||[]).map(x=>({author:(x.author_details&&x.author_details.name)||x.author||"",rating:x.author_details&&x.author_details.rating,content:(x.content||"").slice(0,1500),url:x.url,date:x.created_at}))};
   if(path.startsWith("search/"))return{results:(j.results||[]).slice(0,8).map(x=>({id:x.id,title:x.title||x.name,original:x.original_title||x.original_name,date:x.release_date||x.first_air_date}))};
   if(path.endsWith("/images"))return{backdrops:(j.backdrops||[]).slice(0,12).map(x=>({file_path:x.file_path})),posters:(j.posters||[]).slice(0,12).map(x=>({file_path:x.file_path}))};
   if(path.endsWith("/videos"))return{results:(j.results||[]).filter(v=>v.site==="YouTube").map(v=>({site:v.site,type:v.type,official:v.official,key:v.key}))};
@@ -901,11 +907,43 @@ async function czOverview(s,el,base){
     setInfo(el,inf.time||base.time,inf.genres.length?inf.genres:base.genres,base.extra,inf.rating,cast);
   }catch(e){}
 }
+const isCzText=t=>{
+  const letters=(t.match(/\p{L}/gu)||[]).length;if(letters<40)return false;
+  return (t.match(/[ěščřžýáíéúůďťňó]/gi)||[]).length/letters>0.04;
+};
+async function toggleReviews(s,el,btn){
+  const old=el.querySelector(".rev");
+  if(old){old.remove();return}
+  if(!TM){openPanel("#tm");return}
+  el.querySelectorAll(".trl-box,.gal").forEach(x=>x.remove());
+  btn.textContent="Načítám…";
+  try{
+    const d=await tmGet(s.tmdbId+"/reviews",{language:"cs-CZ"});
+    const cz=(d.results||[]).filter(r=>isCzText(r.content))
+      .sort((a,b)=>(b.rating||0)-(a.rating||0)||b.content.length-a.content.length).slice(0,3);
+    const box=document.createElement("div");box.className="rev";
+    if(!cz.length){
+      box.textContent="K tomuto titulu nejsou na TMDB české recenze. Zkus ČSFD.";
+    }else cz.forEach(r=>{
+      const it=document.createElement("div");it.className="rev-item";
+      const h=document.createElement("div");h.className="rev-h";
+      h.textContent=(r.author||"Anonym")+(r.rating?" · "+r.rating+" / 10":"");
+      const t=document.createElement("p");
+      const txt=r.content.replace(/\s+/g," ").trim();
+      t.textContent=txt.length>420?txt.slice(0,420).replace(/\s+\S*$/,"")+"…":txt;
+      it.appendChild(h);it.appendChild(t);
+      if(r.url){const a=document.createElement("a");a.href=r.url;a.target="_blank";a.rel="noopener";a.textContent="Celá recenze na TMDB";it.appendChild(a)}
+      box.appendChild(it);
+    });
+    el.querySelector(".media").prepend(box);
+  }catch(e){btn.textContent="Recenze nejdou načíst";return}
+  btn.textContent="Recenze";
+}
 async function toggleGallery(s,el,btn){
   const old=el.querySelector(".gal");
   if(old){old.remove();return}
   if(!TM){openPanel("#tm");return}
-  const tr0=el.querySelector(".trl-box");if(tr0)tr0.remove();
+  el.querySelectorAll(".trl-box,.rev").forEach(x=>x.remove());
   btn.textContent="Načítám…";
   try{
     const d=await tmGet(s.tmdbId+"/images",{include_image_language:"cs,en,null"});
@@ -927,7 +965,7 @@ async function toggleTrailer(s,el,btn){
   const old=el.querySelector(".trl-box");
   if(old){old.remove();return}
   if(!TM){openPanel("#tm");return}
-  const gl0=el.querySelector(".gal");if(gl0)gl0.remove();
+  el.querySelectorAll(".gal,.rev").forEach(x=>x.remove());
   btn.textContent="Načítám…";
   try{
     let key=null;
@@ -1189,7 +1227,9 @@ function render(s,i){
     tr.onclick=()=>toggleTrailer(s,el,tr);
     const gb=document.createElement("button");gb.textContent="Galerie";
     gb.onclick=()=>toggleGallery(s,el,gb);
-    drow.appendChild(tr);drow.appendChild(gb);
+    const rb=document.createElement("button");rb.textContent="Recenze";
+    rb.onclick=()=>toggleReviews(s,el,rb);
+    drow.appendChild(tr);drow.appendChild(gb);drow.appendChild(rb);
     czOverview(s,el,base);
   }
   const cs=document.createElement("a");
@@ -1345,6 +1385,20 @@ document.addEventListener("keydown",e=>{
     if(Math.abs(dx)>45&&Math.abs(dx)>Math.abs(dy)*1.3&&Date.now()-t0<800)lbShow(dx<0?lbI+1:lbI-1);
   },{passive:true});
 })();
+function goHome(){
+  listMode="browse";$("#tWl").setAttribute("aria-pressed","false");$("#lsBar").hidden=true;
+  $("#q").value="";picked=null;sugHide();
+  ["#fG","#fY1","#fY2","#fR","#sortSel","#svc"].forEach(x=>{$(x).value=""});
+  $("#flt").hidden=true;$("#fBtn").setAttribute("aria-expanded","false");
+  $("#dubOnly").setAttribute("aria-pressed","true");
+  $("#settings").hidden=true;$("#setBtn").setAttribute("aria-expanded","false");
+  ["#key","#tm","#tk","#tv","#imp"].forEach(x=>{$(x).style.display="none"});
+  const lb=$("#lb");if(lb.open)lb.close();
+  window.scrollTo(0,0);
+  setType("movie");
+}
+$("#home").onclick=goHome;
+$("#home").addEventListener("keydown",e=>{if(e.key==="Enter"||e.key===" "){e.preventDefault();goHome()}});
 $("#sortSel").onchange=sortList;
 $("#expBtn").onclick=async()=>{
   const o={sa:KEY,tm:TM,tk:tk.id||""};
