@@ -223,9 +223,9 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
 </div>
 <div class="bar" id="settings" hidden>
   <button id="chg">DAB API</button>
-  <button id="tkBtn">Trakt</button>
+  <button id="tkBtn">TRAKT</button>
   <button id="tmBtn">TMDB API</button>
-  <button id="tvBtn">Televize</button>
+  <button id="tvBtn">TV</button>
   <button id="expBtn">Zkopírovat nastavení</button>
   <button id="impBtn">Vložit nastavení</button>
   <button id="clr">Vymazat mezipaměť</button>
@@ -262,7 +262,7 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <button id="tvShort" aria-pressed="false">Krátký příkaz: vypnuto</button>
 </div>
 <div id="imp" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
-  <p style="margin:0 0 4px;color:var(--mute)">Vlož kód nastavení, který ti někdo poslal. Obsahuje klíče Streaming Availability a TMDB a Trakt Client ID. Přihlášení k Traktu si pak uděláš sám v Nastavení, Trakt.</p>
+  <p style="margin:0 0 4px;color:var(--mute)">Vlož kód nastavení, který ti někdo poslal. Obsahuje klíče Streaming Availability a TMDB a Trakt Client ID. Přihlášení k Traktu si pak uděláš sám v Nastavení, TRAKT.</p>
   <textarea id="impIn" rows="3" placeholder="dabradar:…" autocomplete="off" style="width:100%;margin:6px 0;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px"></textarea>
   <button id="impGo">Načíst nastavení</button><span id="impMsg" style="margin-left:8px"></span>
 </div>
@@ -791,7 +791,7 @@ async function fetchStreams(kind,id){
   return{list,errs};
 }
 function streamToTv(url){
-  if(!tvHttp){toast("Nejdřív zadej adresu aplikace DABRADAR TV v Nastavení, Televize.");return}
+  if(!tvHttp){toast("Nejdřív zadej adresu aplikace DABRADAR TV v Nastavení, TV.");return}
   const w=window.open("http://"+tvHttp+"?v="+encodeURIComponent(url),"_blank");
   if(!w)toast("Povol vyskakovací okna.");
 }
@@ -805,7 +805,7 @@ async function showStreams(box,kind,id,btn){
   const card=box.closest(".item");
   if(card&&card._stBox===box)closeTabs(card,box);
   box.hidden=false;
-  if(!addons.length){box.textContent="Nejdřív přidej doplňky Stremia v Nastavení, Televize.";return}
+  if(!addons.length){box.textContent="Nejdřív přidej doplňky Stremia v Nastavení, TV.";return}
   box.textContent="Načítám streamy…";
   const {list,errs}=await fetchStreams(kind,id);
   box.textContent="";
@@ -1131,7 +1131,7 @@ function closeTabs(el,keep){
 async function toggleReviews(s,el,btn){
   const old=el.querySelector(".rev");
   if(old){old.remove();return}
-  if(!tk.id){toast("Pro komentáře z Traktu zadej v Nastavení, Trakt své Client ID (přihlášení není nutné).");return}
+  if(!tk.id){toast("Pro komentáře z Traktu zadej v Nastavení, TRAKT své Client ID (přihlášení není nutné).");return}
   if(!s.imdbId){toast("K tomuto titulu nemám IMDb číslo, komentáře z Traktu nejdou načíst.");return}
   closeTabs(el);const my=el._tab={};
   btn.textContent="Načítám…";
