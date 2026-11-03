@@ -900,7 +900,7 @@ function slimTm(path,j){
 }
 async function tmGet(path,params){
   const key="tm:"+path+"?"+JSON.stringify(params||{});
-  const hit=cget(key);if(hit)return hit;
+  const hit=cget(key);if(hit&&!(/\/credits$/.test(path)&&hit.cast&&typeof hit.cast[0]==="string"))return hit;
   const u=new URL("https://api.themoviedb.org/3/"+path);
   u.searchParams.set("api_key",TM);
   for(const k in (params||{}))u.searchParams.set(k,params[k]);
