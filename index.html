@@ -9,10 +9,10 @@
 <meta name="theme-color" content="#16212b">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Source+Sans+3:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#e9eef2;--card:#f8fafb;--ink:#14202b;--mute:#5b6b78;--acc:#b3164f;--teal:#2f6f73;--line:#cbd5dd;--yes:#1f7a4d;--no:#8a5a1f;--purple:#6f4de6;--blue:#2b6cb0;--onblue:#fff;--green:#1f7a4d;--ongreen:#fff}
+:root{--bg:#f7f9fb;--card:#ffffff;--ink:#14202b;--mute:#5b6b78;--acc:#b3164f;--teal:#2f6f73;--line:#d3dbe2;--yes:#1f7a4d;--no:#8a5a1f;--purple:#6f4de6;--blue:#2b6cb0;--onblue:#fff;--green:#1f7a4d;--ongreen:#fff}
 @media (prefers-color-scheme:dark){:root{--bg:#16212b;--card:#1f2d39;--ink:#e9eef2;--mute:#9db0be;--acc:#ff6b97;--teal:#6cc0c4;--line:#34495a;--yes:#6fd6a0;--no:#e0b070;--blue:#7db4ff;--onblue:#0e2238;--green:#6fd6a0;--ongreen:#0c2a1b}}
 :root[data-theme=dark]{--bg:#16212b;--card:#1f2d39;--ink:#e9eef2;--mute:#9db0be;--acc:#ff6b97;--teal:#6cc0c4;--line:#34495a;--yes:#6fd6a0;--no:#e0b070;--blue:#7db4ff;--onblue:#0e2238;--green:#6fd6a0;--ongreen:#0c2a1b;color-scheme:dark}
-:root[data-theme=light]{--bg:#e9eef2;--card:#f8fafb;--ink:#14202b;--mute:#5b6b78;--acc:#b3164f;--teal:#2f6f73;--line:#cbd5dd;--yes:#1f7a4d;--no:#8a5a1f;--blue:#2b6cb0;--onblue:#fff;--green:#1f7a4d;--ongreen:#fff;color-scheme:light}
+:root[data-theme=light]{--bg:#f7f9fb;--card:#ffffff;--ink:#14202b;--mute:#5b6b78;--acc:#b3164f;--teal:#2f6f73;--line:#d3dbe2;--yes:#1f7a4d;--no:#8a5a1f;--blue:#2b6cb0;--onblue:#fff;--green:#1f7a4d;--ongreen:#fff;color-scheme:light}
 .sugwrap{position:relative;flex:1;min-width:180px}
 #sug{position:absolute;left:0;right:0;top:100%;z-index:20;margin:4px 0 0;padding:4px;list-style:none;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.3);max-height:55vh;overflow:auto}
 #sug button{width:100%;text-align:left;border:0;background:none;padding:8px 10px;border-radius:6px}
@@ -329,6 +329,7 @@ function applyTheme(m){
   const r=document.documentElement;
   if(m==="dark"||m==="light")r.setAttribute("data-theme",m);else r.removeAttribute("data-theme");
   const t=$("#thBtn");if(t){const l="Vzhled: "+(m==="dark"?"tmavý":m==="light"?"světlý":"podle telefonu");t.innerHTML=THICON[m==="dark"?"dark":m==="light"?"light":"auto"];t.setAttribute("aria-label",l);t.title=l}
+  try{const dk=m==="dark"||(m!=="light"&&matchMedia("(prefers-color-scheme:dark)").matches);const mt=document.querySelector('meta[name=theme-color]');if(mt)mt.content=dk?"#16212b":"#f7f9fb"}catch(e){}
 }
 let themeMode=ls(true,"theme")||"";
 applyTheme(themeMode);
