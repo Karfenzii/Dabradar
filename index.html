@@ -90,6 +90,12 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 .submenu a{background:var(--card);color:var(--ink);border:1px solid var(--line)}
 .stmenu a{background:var(--purple);color:#fff;text-decoration:none;border-radius:8px;padding:6px 12px;font-weight:600;font-size:.92rem}
 .info{display:flex;flex-wrap:wrap;gap:2px 14px;color:var(--mute);font-size:.92rem;margin-top:2px}
+.stlist{margin:8px 0;font-size:.9rem}
+.stm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
+.stm span{flex:1 1 100%;color:var(--ink)}
+.stm small,.sterr{color:var(--mute)}
+.stm button,.stm a{padding:4px 10px}
+.ep .stlist{grid-column:1/-1}
 .play a.prim{font-weight:700}
 .info button.actor{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline dotted;cursor:pointer}
 #actorBar{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:600}
@@ -237,6 +243,9 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <p style="margin:0 0 4px;color:var(--mute)">Aplikace DABRADAR TV: vlož řádek, který ukazuje aplikace na televizi, například 192.168.0.72:8765/123456. Tlačítko Pustit na TV pak otevře Stremio na TV samo, bez Termuxu.</p>
   <input id="tvHttpIn" placeholder="192.168.0.72:8765/123456" autocomplete="off" inputmode="url" style="width:100%;margin:6px 0">
   <button id="tvHttpSave">Uložit adresu aplikace</button><span id="tvHttpMsg" style="margin-left:8px"></span>
+  <p style="margin:14px 0 4px;color:var(--mute)">Doplňky Stremia pro nabídku streamů: adresy manifest.json (ve Stremiu Doplňky, u doplňku Kopírovat odkaz), každá na samostatném řádku. Odkazy mohou obsahovat tvé přihlášení, nikomu je neposílej.</p>
+  <textarea id="adIn" rows="3" placeholder="https://…/manifest.json" autocomplete="off" style="width:100%;margin:6px 0;font:inherit;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 12px"></textarea>
+  <button id="adSave">Uložit doplňky</button><span id="adMsg" style="margin-left:8px"></span>
   <p style="margin:14px 0 4px;color:var(--mute)">Adresa televize pro Bezdrátové ladění (starý postup přes Termux): IP adresa a připojovací port z obrazovky Bezdrátové ladění na TV, například 192.168.1.50:37215.</p>
   <input id="tvIn" placeholder="192.168.1.50:37215" autocomplete="off" inputmode="url" style="width:100%;margin:6px 0">
   <button id="tvSave">Uložit adresu</button><span id="tvMsg" style="margin-left:8px"></span>
@@ -748,6 +757,62 @@ let toastTimer;
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},4500)}
 let tvAddr=ls(true,"tvAddr")||"";
 let tvHttp=ls(true,"tvHttp")||"";
+let addons=(ls(true,"addons")||"").split("\n").map(x=>x.trim()).filter(Boolean);
+const addonBase=u=>u.replace(/^stremio:\/\//i,"https://").replace(/\/manifest\.json.*$/i,"").replace(/\/+$/,"");
+async function fetchStreams(kind,id){
+  const list=[],errs=[];
+  await Promise.all(addons.map(async a=>{
+    const b=addonBase(a);let host=b;
+    try{host=new URL(b).hostname}catch(e){}
+    const ac=new AbortController(),t=setTimeout(()=>ac.abort(),20000);
+    try{
+      const r=await fetch(b+"/stream/"+kind+"/"+id.replace(/[^\w:.\-]/g,"")+".json",{signal:ac.signal});
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      const j=await r.json();
+      (j.streams||[]).forEach(x=>list.push(Object.assign({},x,{_src:host})));
+    }catch(e){errs.push(host+": "+(e&&e.name==="AbortError"?"vypršel čas":(e&&e.message)||"chyba"))}
+    clearTimeout(t);
+  }));
+  return{list,errs};
+}
+function streamToTv(url){
+  if(!tvHttp){toast("Nejdřív zadej adresu aplikace DABRADAR TV v Nastavení, Televize.");return}
+  const w=window.open("http://"+tvHttp+"?v="+encodeURIComponent(url),"_blank");
+  if(!w)toast("Povol vyskakovací okna.");
+}
+async function copyTxt(t,btn){
+  const old=btn.textContent;
+  try{await navigator.clipboard.writeText(t);btn.textContent="Zkopírováno"}catch(e){window.prompt("Zkopíruj:",t)}
+  setTimeout(()=>{btn.textContent=old},1800);
+}
+async function showStreams(box,kind,id,btn){
+  if(!box.hidden){box.hidden=true;return}
+  box.hidden=false;
+  if(!addons.length){box.textContent="Nejdřív přidej doplňky Stremia v Nastavení, Televize.";return}
+  box.textContent="Načítám streamy…";
+  const {list,errs}=await fetchStreams(kind,id);
+  box.textContent="";
+  list.forEach(x=>{
+    const row=document.createElement("div");row.className="stm";
+    const tx=document.createElement("span");
+    tx.textContent=[x.name,x.title||x.description].filter(Boolean).join(" · ").replace(/\s*\n\s*/g," | ").slice(0,220)||"Stream";
+    const sm=document.createElement("small");sm.textContent=" ("+x._src+")";tx.appendChild(sm);
+    row.appendChild(tx);
+    if(x.url&&/^https?:\/\//i.test(x.url)){
+      const tv=document.createElement("button");tv.textContent="TV";tv.className="tvb";tv.onclick=()=>streamToTv(x.url);
+      const cp=document.createElement("button");cp.textContent="Kopírovat";cp.onclick=()=>copyTxt(x.url,cp);
+      row.appendChild(tv);row.appendChild(cp);
+    }else if(x.infoHash){
+      const cp=document.createElement("button");cp.textContent="Kopírovat magnet";cp.onclick=()=>copyTxt("magnet:?xt=urn:btih:"+x.infoHash,cp);
+      row.appendChild(cp);
+    }else if(x.externalUrl&&/^https?:\/\//i.test(x.externalUrl)){
+      const a=document.createElement("a");a.href=x.externalUrl;a.target="_blank";a.rel="noopener";a.textContent="Otevřít";row.appendChild(a);
+    }
+    box.appendChild(row);
+  });
+  if(!list.length){const d=document.createElement("div");d.textContent="Žádné streamy nenalezeny.";box.appendChild(d)}
+  if(errs.length){const d=document.createElement("small");d.className="sterr";d.textContent="Nepovedlo se: "+errs.join("; ");box.appendChild(d)}
+}
 const tkSets=()=>({watchlist:tkWl,history:tkSeen});
 function tkGet(path){
   return fetch("https://api.trakt.tv"+path,{headers:{"trakt-api-version":"2","trakt-api-key":tk.id||"",Authorization:"Bearer "+tk.token}});
@@ -1274,7 +1339,7 @@ function renderEpisodes(s,sn,eps,body,meta){
     });
     row.appendChild(t);
     const eb=document.createElement("div");eb.className="eb";
-    let pre=null;
+    let pre=null,stBox=null;
     if(s.imdbId){
       if(!isFuture(e)){
         const tv=document.createElement("button");tv.className="tvep tvb";tv.textContent="TV";tv.title="Pustit na televizi";
@@ -1283,6 +1348,10 @@ function renderEpisodes(s,sn,eps,body,meta){
         tv.onclick=()=>tvRun(link,pre,tv);
         const st=document.createElement("a");st.className="epst";st.href=link;st.textContent="Stremio";st.title="Přehrát ve Stremiu v tomto zařízení";
         eb.appendChild(st);eb.appendChild(tv);
+        const sbt=document.createElement("button");sbt.className="tvep";sbt.textContent="Streamy";sbt.title="Nabídka streamů z doplňků Stremia";
+        stBox=document.createElement("div");stBox.className="stlist";stBox.hidden=true;
+        sbt.onclick=()=>showStreams(stBox,"series",s.imdbId+":"+sn+":"+e.episode_number,sbt);
+        eb.appendChild(sbt);
       }
       const b=document.createElement("button");b.className="epb";b.dataset.imdb=s.imdbId;b.dataset.key=sn+":"+e.episode_number;
       if(isFuture(e)){b.dataset.future="1";b.disabled=true;b.textContent="Nevyšlo"}
@@ -1291,6 +1360,7 @@ function renderEpisodes(s,sn,eps,body,meta){
     }
     row.appendChild(eb);
     if(pre)row.appendChild(pre);
+    if(stBox)row.appendChild(stBox);
     body.appendChild(row);
   });
 }
@@ -1412,6 +1482,16 @@ function render(s,i){
   cs.href="https://www.csfd.cz/hledat/?q="+encodeURIComponent(s.title);
   cs.target="_blank";cs.rel="noopener";cs.textContent="ČSFD";cs.className="csl";
   drow.appendChild(cs);
+  const stBox=document.createElement("div");stBox.className="stlist";stBox.hidden=true;
+  if(s.imdbId){
+    const sbt=document.createElement("button");sbt.textContent="Streamy";
+    sbt.onclick=()=>{
+      const isTvS=(s.showType==="series"||type==="series"||String(s.tmdbId||"").startsWith("tv/"));
+      if(isTvS){const n=nextEp(s);showStreams(stBox,"series",s.imdbId+":"+n.sn+":"+n.ep,sbt)}
+      else showStreams(stBox,"movie",s.imdbId,sbt);
+    };
+    drow.appendChild(sbt);
+  }
   const subMenu=document.createElement("div");subMenu.className="stmenu submenu";subMenu.hidden=true;
   const sq=encodeURIComponent(s.title),yr=s.releaseYear||s.firstAirYear||"";
   const imdbNum=(s.imdbId||"").replace(/^tt/,"");
@@ -1426,7 +1506,7 @@ function render(s,i){
   const media=document.createElement("div");media.className="media";
   const isSeriesCard=!!s.tmdbId&&(String(s.tmdbId).startsWith("tv/")||s.showType==="series"||type==="series");
   const tree=document.createElement("div");tree.className="tree";
-  det.appendChild(drow);det.appendChild(subMenu);
+  det.appendChild(drow);det.appendChild(subMenu);det.appendChild(stBox);
   if(isSeriesCard)det.appendChild(tree);
   det.appendChild(media);
   el.appendChild(det);
@@ -1460,7 +1540,11 @@ $("#tmSave").onclick=()=>{const v=$("#tmKey").value.trim();if(!v)return;TM=v;ls(
 $("#tkBtn").onclick=()=>{const b=$("#tk");b.style.display=b.style.display==="block"?"none":"block";$("#tkId").value=tk.id||"";$("#tkRedir").value=tk.redir||"http://localhost:5173/callback"};
 $("#tkGo").onclick=tkConnect;
 $("#tkFin").onclick=tkFinish;
-$("#tvBtn").onclick=()=>{const b=$("#tv");b.style.display=b.style.display==="block"?"none":"block";$("#tvIn").value=tvAddr;$("#tvHttpIn").value=tvHttp};
+$("#tvBtn").onclick=()=>{const b=$("#tv");b.style.display=b.style.display==="block"?"none":"block";$("#tvIn").value=tvAddr;$("#tvHttpIn").value=tvHttp;$("#adIn").value=addons.join("\n")};
+$("#adSave").onclick=()=>{
+  addons=$("#adIn").value.split("\n").map(x=>x.trim()).filter(Boolean);
+  ls(false,"addons",addons.join("\n"));$("#adMsg").textContent="Uloženo ("+addons.length+").";
+};
 $("#tvHttpSave").onclick=()=>{
   const v=$("#tvHttpIn").value.trim();
   if(v&&!/^[A-Za-z0-9.\-]+:\d{2,5}\/\d{4,8}$/.test(v)){$("#tvHttpMsg").textContent="Zadej ve tvaru IP:port/kód.";return}

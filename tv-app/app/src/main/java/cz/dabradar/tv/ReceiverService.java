@@ -87,10 +87,22 @@ public class ReceiverService extends Service {
             msg = "Špatný kód.";
         } else {
             String link = null;
+            String video = null;
             for (String kv : query.split("&")) {
                 if (kv.startsWith("u=")) link = URLDecoder.decode(kv.substring(2), "UTF-8");
+                if (kv.startsWith("v=")) video = URLDecoder.decode(kv.substring(2), "UTF-8");
             }
-            if (link == null || !link.startsWith("stremio:///")) {
+            if (video != null) {
+                if (!(video.startsWith("http://") || video.startsWith("https://"))) {
+                    status = "400 Bad Request";
+                    msg = "Neplatný odkaz.";
+                } else if (openVideo(video)) {
+                    msg = "Odesláno na TV.";
+                } else {
+                    status = "500 Error";
+                    msg = "Na TV není přehrávač, který by video otevřel.";
+                }
+            } else if (link == null || !link.startsWith("stremio:///")) {
                 msg = "Připojeno. Čekám na odkaz.";
             } else if (open(link)) {
                 msg = "Odesláno na TV.";
@@ -107,6 +119,18 @@ public class ReceiverService extends Service {
         o.write(body);
         o.flush();
         s.shutdownOutput();
+    }
+
+    private boolean openVideo(String url) {
+        try {
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(Uri.parse(url), "video/*");
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private boolean open(String link) {
