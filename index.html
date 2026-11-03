@@ -90,9 +90,14 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 .submenu a{background:var(--card);color:var(--ink);border:1px solid var(--line)}
 .stmenu a{background:var(--purple);color:#fff;text-decoration:none;border-radius:8px;padding:6px 12px;font-weight:600;font-size:.92rem}
 .info{display:flex;flex-wrap:wrap;gap:2px 14px;color:var(--mute);font-size:.92rem;margin-top:2px}
+.play a.prim{font-weight:700}
+.info button.actor{background:none;border:0;padding:0;color:var(--ink);text-decoration:underline dotted;cursor:pointer}
+#actorBar{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:12px;font-weight:600}
+#actorBar button{padding:2px 10px;margin-left:6px;font-weight:400}
 .info b{color:var(--ink);font-weight:600}
 .tkb{border-color:var(--c)}
 .tkb.wl{--c:var(--blue);--onc:var(--onblue)}
+.tkb.wd{--c:var(--tvc);--onc:var(--tvon)}
 .tkb.seen{--c:var(--green);--onc:var(--ongreen)}
 .tkb[aria-pressed=true]{background:var(--c);color:var(--onc);border-color:var(--c)}
 .tree{margin-top:10px}
@@ -247,6 +252,7 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
 </div>
 
 <p class="hint">Klepnutím kamkoli na kartu zobrazíte trailer, galerii a odkaz na ČSFD. U seriálů také série a díly.</p>
+<div id="actorBar" hidden><span id="actorTxt"></span> <button id="actorX" type="button">Zavřít</button></div>
 <div id="news" hidden><span id="newsTxt"></span> <button id="newsX" type="button">Skrýt</button></div>
 <div id="list"></div>
 <div id="msg"></div>
@@ -285,9 +291,9 @@ function ls(get,k,v){try{return get?localStorage.getItem(k):localStorage.setItem
 KEY=ls(true,"saKey")||"";
 
 const MEM=new Map();
-let dubKnown={},dubNew={},dubTitle={},dubAt={},tkLast={},epDubDone={};
-try{dubKnown=JSON.parse(ls(true,"dubKnown")||"{}");dubNew=JSON.parse(ls(true,"dubNew")||"{}");dubTitle=JSON.parse(ls(true,"dubTitle")||"{}");dubAt=JSON.parse(ls(true,"dubAt")||"{}")}catch(e){}
-const saveDub=()=>{ls(false,"dubKnown",JSON.stringify(dubKnown));ls(false,"dubNew",JSON.stringify(dubNew));ls(false,"dubTitle",JSON.stringify(dubTitle));ls(false,"dubAt",JSON.stringify(dubAt))};
+let dubKnown={},dubNew={},dubTitle={},dubAt={},dubWatch={},tkLast={},epDubDone={};
+try{dubKnown=JSON.parse(ls(true,"dubKnown")||"{}");dubNew=JSON.parse(ls(true,"dubNew")||"{}");dubTitle=JSON.parse(ls(true,"dubTitle")||"{}");dubAt=JSON.parse(ls(true,"dubAt")||"{}");dubWatch=JSON.parse(ls(true,"dubWatch")||"{}")}catch(e){}
+const saveDub=()=>{ls(false,"dubKnown",JSON.stringify(dubKnown));ls(false,"dubNew",JSON.stringify(dubNew));ls(false,"dubTitle",JSON.stringify(dubTitle));ls(false,"dubAt",JSON.stringify(dubAt));ls(false,"dubWatch",JSON.stringify(dubWatch))};
 const nz=t=>(t||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
 function paintNews(){
   const since=+ls(true,"newsSeen")||0;
@@ -367,15 +373,16 @@ async function loadCatalogs(){
     const c=await client.countriesApi.getCountry({countryCode:"cz"});
     catalogs=c.services.map(s=>s.id);
     const sel=$("#svc");sel.length=1;
-    c.services.forEach(x=>sel.add(new Option(x.name,x.id)));
+    [...c.services].sort((a,b)=>svcPri(a.name)-svcPri(b.name)).forEach(x=>sel.add(new Option(x.name,x.id)));
   }catch(e){
     catalogs=["netflix","prime","disney","hbo","apple","skyshowtime"];
   }
 }
 
+const svcPri=n=>/oneplay/i.test(n||"")?0:1;
 const isCz=a=>["ces","cze","cs"].includes((a.language||"").toLowerCase());
 function czInfo(show){
-  const opts=(show.streamingOptions&&show.streamingOptions.cz)||[];
+  const opts=[...((show.streamingOptions&&show.streamingOptions.cz)||[])].sort((a,b)=>svcPri(a.service&&a.service.name)-svcPri(b.service&&b.service.name));
   const dubbed=new Set(),all=new Set(),links={},anyLinks={},subs=new Set();let since=0;
   opts.forEach(o=>{
     const n=o.service&&o.service.name;if(!n)return;
@@ -461,7 +468,7 @@ async function showBatch(shows,onlyDub,extra){
   let dubChanged=false;
   shows.forEach(x=>{
     const id=x.imdbId;if(!id)return;
-    const tracked=tkWl.has(id)||Object.values(tkLists).some(l=>l.ids.has(id));
+    const tracked=dubWatch[id]||tkWl.has(id)||Object.values(tkLists).some(l=>l.ids.has(id));
     if(!tracked)return;
     const now=czInfo(x).dubbed.length>0;
     if(dubTitle[id]!==x.title){dubTitle[id]=x.title;dubChanged=true}
@@ -539,8 +546,47 @@ async function sugFetch(){
     ul.hidden=!ul.children.length;$("#q").setAttribute("aria-expanded",String(!ul.hidden));
   }catch(e){sugHide()}
 }
+let actor=null;
+function actorClose(){actor=null;$("#actorBar").hidden=true}
+async function openActor(id,name){
+  if(!KEY||!TM){toast("Herci potřebují klíč TMDB.");return}
+  listMode="actor";actor={id,name};
+  $("#tWl").setAttribute("aria-pressed","false");$("#lsBar").hidden=true;
+  $("#actorTxt").textContent="Další tituly: "+name;$("#actorBar").hidden=false;
+  window.scrollTo(0,0);
+  load(true);
+}
+async function loadActor(reset){
+  if(!reset)return;
+  loading=true;$("#list").innerHTML="";$("#more").hidden=true;$("#msg").textContent="Načítám filmografii…";
+  const my=actor;
+  try{
+    if(!client)await setup();
+    const cr=await tmGet("person/"+my.id+"/combined_credits",{language:"cs-CZ"});
+    const seen=new Set(),items=[];
+    cr.cast.forEach(c=>{const k=c.mt+"/"+c.id;if(!seen.has(k)){seen.add(k);items.push(c)}});
+    const ids=items.slice(0,20);
+    const got=[];let idx=0,done=0,stop=false;
+    const worker=async()=>{
+      while(idx<ids.length&&!stop&&actor===my){
+        const c=ids[idx++];
+        try{const sh=await saShow((c.mt==="tv"?"tv":"movie")+"/"+c.id);got.push(sh)}
+        catch(e){if(e&&e.response&&e.response.status===429)stop=true}
+        done++;$("#msg").textContent="Načítám tituly… "+done+" z "+ids.length;
+      }
+    };
+    await Promise.all([worker(),worker(),worker(),worker()]);
+    if(actor!==my)return;
+    $("#list").innerHTML="";
+    const n=await showBatch(got,false,null);
+    $("#msg").textContent=(n?"":"Nic nenalezeno.")+(stop?" Došel denní limit dotazů, zobrazeno jen část.":"");
+    if(n)$("#msg").textContent=stop?"Došel denní limit dotazů, zobrazeno jen část.":"";
+  }catch(e){$("#msg").textContent=await errText(e)}
+  loading=false;
+}
 async function load(reset){
   if(loading||!KEY)return;
+  if(listMode==="actor")return loadActor(reset);
   if(listMode==="watchlist")return loadWatchlist(reset);
   loading=true;updFiltBtn();
   if(reset){cursor=undefined;$("#list").innerHTML="";}
@@ -842,7 +888,9 @@ function slimTm(path,j){
   if(path.endsWith("/images"))return{backdrops:(j.backdrops||[]).slice(0,12).map(x=>({file_path:x.file_path})),posters:(j.posters||[]).slice(0,12).map(x=>({file_path:x.file_path}))};
   if(path.endsWith("/videos"))return{results:(j.results||[]).filter(v=>v.site==="YouTube").map(v=>({site:v.site,type:v.type,official:v.official,key:v.key}))};
   if(/\/season\/\d+$/.test(path))return{episodes:(j.episodes||[]).map(e=>({episode_number:e.episode_number,name:e.name,runtime:e.runtime,air_date:e.air_date}))};
-  if(path.endsWith("/credits"))return{cast:(j.cast||[]).slice(0,3).map(c=>c.name)};
+  if(path.endsWith("/combined_credits"))return{cast:(j.cast||[]).filter(c=>(c.media_type==="movie"||c.media_type==="tv")&&!/self|himself|herself/i.test(c.character||"")&&!(c.genre_ids||[]).some(g=>g===10767||g===10763||g===10764)).sort((a,b)=>(b.popularity||0)-(a.popularity||0)).slice(0,60).map(c=>({id:c.id,mt:c.media_type,title:c.title||c.name}))};
+  if(path.endsWith("/watch/providers")){const cz=(j.results||{}).CZ||{};return{link:cz.link||"",flat:(cz.flatrate||[]).map(x=>x.provider_name)}}
+  if(path.endsWith("/credits"))return{cast:(j.cast||[]).slice(0,3).map(c=>({id:c.id,name:c.name}))};
   return{overview:j.overview,title:j.title,name:j.name,release_date:j.release_date,first_air_date:j.first_air_date,runtime:j.runtime,
     genres:(j.genres||[]).map(g=>({name:g.name})),episode_run_time:j.episode_run_time,number_of_episodes:j.number_of_episodes,
     last_episode_to_air:j.last_episode_to_air?{runtime:j.last_episode_to_air.runtime}:null,
@@ -859,7 +907,7 @@ async function tmGet(path,params){
   const r=await fetch(u);
   if(!r.ok)throw new Error("TMDB "+r.status);
   const v=slimTm(path,await r.json());
-  cset(key,v,/\/credits$/.test(path)?7*86400e3:/\/season\/\d+$/.test(path)?12*3600e3:/\/(images|videos)$/.test(path)?7*86400e3:24*3600e3);
+  cset(key,v,/(credits|providers)$/.test(path)?7*86400e3:/\/season\/\d+$/.test(path)?12*3600e3:/\/(images|videos)$/.test(path)?7*86400e3:24*3600e3);
   return v;
 }
 function fmtMin(m){m=Math.round(m);const h=Math.floor(m/60),r=m%60;return h?(r?h+" h "+r+" min":h+" h"):r+" min"}
@@ -869,7 +917,14 @@ function setInfo(el,time,genres,extra,rating,cast){
   if(time)add(time.label,time.text);else if(extra)add("Rozsah",extra);
   if(genres&&genres.length)add("Žánry",genres.slice(0,3).join(", "));
   if(rating)add("Hodnocení",rating);
-  if(cast&&cast.length)add("Hrají",cast.join(", "));
+  if(cast&&cast.length){
+    add("Hrají","");const sp=box.lastChild;
+    cast.forEach((c,k)=>{
+      if(k)sp.appendChild(document.createTextNode(", "));
+      if(c&&c.id){const b=document.createElement("button");b.type="button";b.className="actor";b.textContent=c.name;b.onclick=()=>openActor(c.id,c.name);sp.appendChild(b)}
+      else sp.appendChild(document.createTextNode(c&&c.name?c.name:String(c)));
+    });
+  }
 }
 function infoFromSA(s){
   const isTv=(s.showType==="series"||type==="series");
@@ -909,6 +964,17 @@ async function czOverview(s,el,base){
     let cast=[];
     try{cast=(await tmGet(s.tmdbId+"/credits",{language:"cs-CZ"})).cast}catch(e){}
     setInfo(el,inf.time||base.time,inf.genres.length?inf.genres:base.genres,base.extra,inf.rating,cast);
+    try{
+      const pv=await tmGet(s.tmdbId+"/watch/providers",{});
+      const info=czInfo(s);
+      if(pv.flat.some(n=>/oneplay/i.test(n))&&!info.all.some(n=>/oneplay/i.test(n))){
+        const sv=el.querySelector(".svc");sv.textContent="Dostupné na: Oneplay (dle TMDB), "+info.all.join(", ");
+        if(pv.link){
+          const a=document.createElement("a");a.href=pv.link;a.target="_blank";a.rel="noopener";a.className="prim";a.textContent="Oneplay (přes JustWatch)";
+          const pl=el.querySelector(".play");pl.insertBefore(a,pl.firstChild);
+        }
+      }
+    }catch(e){}
   }catch(e){}
 }
 const isCzText=t=>{
@@ -1235,6 +1301,10 @@ function tvShow(s,box,btn){
   const id=s.imdbId,isTv=(s.showType==="series"||type==="series");
   return tvRun(isTv?"stremio:///detail/series/"+id+"/"+id+":1:1":"stremio:///detail/movie/"+id+"/"+id,box,btn);
 }
+const lazyIO=("IntersectionObserver" in window)?new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){lazyIO.unobserve(e.target);const f=e.target._lazy;e.target._lazy=null;if(f)f()}
+}),{rootMargin:"400px"}):null;
+function lazyRun(el,f){if(!lazyIO){f();return}el._lazy=f;lazyIO.observe(el)}
 function render(s,i){
   const el=document.createElement("article");el.className="item";
   const poster=s.imageSet&&s.imageSet.verticalPoster&&(s.imageSet.verticalPoster.w240||s.imageSet.verticalPoster.w360);
@@ -1257,7 +1327,7 @@ function render(s,i){
   const play=el.querySelector(".play");
   Object.keys(i.links).forEach(n=>{
     const a=document.createElement("a");
-    a.href=i.links[n];a.target="_blank";a.rel="noopener";a.textContent="Pustit na "+n;
+    a.href=i.links[n];a.target="_blank";a.rel="noopener";a.textContent="Pustit na "+n;if(svcPri(n)===0)a.className="prim";
     play.appendChild(a);
   });
   if(s.imdbId){
@@ -1286,6 +1356,16 @@ function render(s,i){
     hs.onclick=()=>tkToggle(s,"history",hs);
     paintTk(wl);paintTk(hs);
     play.appendChild(wl);play.appendChild(hs);
+    if(!i.dubbed.length){
+      const wd=document.createElement("button");wd.className="tkb wd";
+      const pw=()=>{const on=!!dubWatch[s.imdbId];wd.setAttribute("aria-pressed",String(on));wd.textContent=on?"Hlídám dabing":"Hlídat dabing"};
+      wd.onclick=()=>{
+        if(dubWatch[s.imdbId]){delete dubWatch[s.imdbId]}
+        else{dubWatch[s.imdbId]=1;dubKnown[s.imdbId]=false;dubTitle[s.imdbId]=s.title;dubAt[s.imdbId]=0;toast("Budu hlídat, jestli se objeví český dabing. Zkontroluju to při otevření stránky, nejvýš dvakrát denně.")}
+        saveDub();pw();
+      };
+      pw();play.appendChild(wd);
+    }
   }
   const det=document.createElement("div");det.className="det";det.hidden=true;
   const drow=document.createElement("div");drow.className="row";
@@ -1297,7 +1377,7 @@ function render(s,i){
     const rb=document.createElement("button");rb.textContent="Komentáře";
     rb.onclick=()=>toggleReviews(s,el,rb);
     drow.appendChild(tr);drow.appendChild(gb);drow.appendChild(rb);
-    czOverview(s,el,base);
+    lazyRun(el,()=>czOverview(s,el,base));
   }
   const cs=document.createElement("a");
   cs.href="https://www.csfd.cz/hledat/?q="+encodeURIComponent(s.title);
@@ -1421,6 +1501,7 @@ async function loadLists(){
   }catch(e){}
 }
 $("#tWl").onclick=async e=>{
+  actorClose();
   listMode=listMode==="watchlist"?"browse":"watchlist";
   const on=listMode==="watchlist";
   e.currentTarget.setAttribute("aria-pressed",String(on));
@@ -1453,7 +1534,7 @@ document.addEventListener("keydown",e=>{
   },{passive:true});
 })();
 function goHome(){
-  listMode="browse";$("#tWl").setAttribute("aria-pressed","false");$("#lsBar").hidden=true;
+  actorClose();listMode="browse";$("#tWl").setAttribute("aria-pressed","false");$("#lsBar").hidden=true;
   $("#q").value="";picked=null;sugHide();
   ["#fG","#fY1","#fY2","#fR","#sortSel","#svc"].forEach(x=>{$(x).value=""});
   $("#flt").hidden=true;$("#fBtn").setAttribute("aria-expanded","false");
@@ -1519,6 +1600,7 @@ $("#q").addEventListener("keydown",e=>{
 $("#q").addEventListener("input",()=>{picked=null;clearTimeout(sugTimer);sugTimer=setTimeout(sugFetch,300)});
 $("#q").addEventListener("blur",()=>setTimeout(sugHide,200));
 $("#sug").addEventListener("mousedown",e=>e.preventDefault());
+$("#actorX").onclick=()=>{actorClose();listMode="browse";load(true)};
 $("#newsX").onclick=()=>{ls(false,"newsSeen",String(Date.now()));paintNews()};
 $("#q").addEventListener("search",()=>{if(!$("#q").value)load(true)});
 $("#chg").onclick=()=>{$("#key").style.display="block";$("#keyIn").value=KEY};
@@ -1529,9 +1611,9 @@ $("#keySave").onclick=()=>{
 if(location.protocol.startsWith("http")&&"serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 paintNews();
 async function dubCheck(){
-  if(!KEY||!tk.token)return;
+  if(!KEY)return;
   if(Date.now()-(+ls(true,"dubCheckAt")||0)<12*3600e3)return;
-  const ids=Object.keys(dubKnown).filter(id=>dubKnown[id]===false).sort((a,b)=>(dubAt[a]||0)-(dubAt[b]||0)).slice(0,10);
+  const ids=Object.keys(dubKnown).filter(id=>dubKnown[id]===false).sort((a,b)=>(!!dubWatch[b]-!!dubWatch[a])||(dubAt[a]||0)-(dubAt[b]||0)).slice(0,10);
   if(!ids.length)return;
   ls(false,"dubCheckAt",String(Date.now()));
   try{
@@ -1545,7 +1627,7 @@ async function dubCheck(){
     saveDub();paintNews();
   }catch(e){}
 }
-if(tk.token)tkSync().then(dubCheck);
+if(tk.token)tkSync().then(dubCheck);else dubCheck();
 if(KEY){load(true)}else{$("#msg").textContent="Nejdřív zadejte klíč: Nastavení, Změnit klíč."}
 </script>
 </body>
