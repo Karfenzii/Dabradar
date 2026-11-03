@@ -943,25 +943,34 @@ async function translateCz(text){
 async function toggleReviews(s,el,btn){
   const old=el.querySelector(".rev");
   if(old){old.remove();return}
-  if(!TM){openPanel("#tm");return}
+  if(!tk.id){toast("Pro komentáře z Traktu zadej v Nastavení, Trakt své Client ID (přihlášení není nutné).");return}
+  if(!s.imdbId){toast("K tomuto titulu nemám IMDb číslo, komentáře z Traktu nejdou načíst.");return}
   el.querySelectorAll(".trl-box,.gal").forEach(x=>x.remove());
   btn.textContent="Načítám…";
   try{
-    const d=await tmGet(s.tmdbId+"/reviews",{language:"cs-CZ"});
-    const prep=r=>({...r,txt:r.content.replace(/\s+/g," ").trim()});
-    const all=(d.results||[]).map(prep).filter(r=>r.txt.length>=60);
-    const byRate=(a,b)=>(b.rating||0)-(a.rating||0)||b.txt.length-a.txt.length;
+    const kind=(s.showType==="series"||type==="series")?"shows":"movies";
+    const ck="tk:cm:"+kind+":"+s.imdbId;
+    let list=cget(ck);
+    if(!list){
+      const r=await fetch("https://api.trakt.tv/"+kind+"/"+s.imdbId+"/comments/likes?limit=50",{headers:{"trakt-api-version":"2","trakt-api-key":tk.id}});
+      if(!r.ok)throw new Error("trakt "+r.status);
+      list=(await r.json()).map(c=>({id:c.id,author:(c.user&&(c.user.name||c.user.username))||"",rating:c.user_rating,likes:c.likes||0,spoiler:!!c.spoiler,content:(c.comment||"").slice(0,1500)}));
+      cset(ck,list,24*3600e3);
+    }
+    const prep=r=>({...r,txt:r.content.replace(/\s+/g," ").trim(),url:"https://trakt.tv/comments/"+r.id});
+    const all=list.filter(r=>!r.spoiler).map(prep).filter(r=>r.txt.length>=40);
+    const byRate=(a,b)=>(b.likes||0)-(a.likes||0)||(b.rating||0)-(a.rating||0);
     const cz=all.filter(r=>isCzText(r.txt)).sort(byRate);
     const foreign=all.filter(r=>!isCzText(r.txt)).sort(byRate);
     const pick=[...cz.slice(0,3).map(r=>({...r,cz:true}))];
     foreign.slice(0,3-pick.length).forEach(r=>pick.push({...r,cz:false}));
     const box=document.createElement("div");box.className="rev";
     if(!pick.length){
-      box.textContent="K tomuto titulu zatím nejsou na TMDB žádné recenze. Zkus ČSFD.";
+      box.textContent="K tomuto titulu zatím nejsou na Traktu žádné komentáře bez spoilerů. Zkus ČSFD.";
     }else pick.forEach(r=>{
       const it=document.createElement("div");it.className="rev-item";
       const h=document.createElement("div");h.className="rev-h";
-      h.textContent=(r.author||"Anonym")+(r.rating?" · "+r.rating+" / 10":"")+(r.cz?"":" · původně cizojazyčná");
+      h.textContent=(r.author||"Anonym")+(r.rating?" · "+r.rating+" / 10":"")+(r.likes?" · ♥ "+r.likes:"")+(r.cz?"":" · původně cizojazyčný");
       const t=document.createElement("p");
       const short=r.txt.length>420?r.txt.slice(0,420).replace(/\s+\S*$/,"")+"…":r.txt;
       t.textContent=short;
@@ -988,13 +997,13 @@ async function toggleReviews(s,el,btn){
         };
         row.appendChild(tb);
       }
-      if(r.url){const a=document.createElement("a");a.href=r.url;a.target="_blank";a.rel="noopener";a.textContent="Celá recenze na TMDB";row.appendChild(a)}
+      if(r.url){const a=document.createElement("a");a.href=r.url;a.target="_blank";a.rel="noopener";a.textContent="Celý komentář na Traktu";row.appendChild(a)}
       it.appendChild(row);
       box.appendChild(it);
     });
     el.querySelector(".media").prepend(box);
-  }catch(e){btn.textContent="Recenze nejdou načíst";return}
-  btn.textContent="Recenze";
+  }catch(e){btn.textContent="Komentáře";toast("Komentáře z Traktu se nepodařilo načíst. Zkontroluj Client ID v Nastavení nebo to zkus později.");return}
+  btn.textContent="Komentáře";
 }
 async function toggleGallery(s,el,btn){
   const old=el.querySelector(".gal");
@@ -1284,7 +1293,7 @@ function render(s,i){
     tr.onclick=()=>toggleTrailer(s,el,tr);
     const gb=document.createElement("button");gb.textContent="Galerie";
     gb.onclick=()=>toggleGallery(s,el,gb);
-    const rb=document.createElement("button");rb.textContent="Recenze";
+    const rb=document.createElement("button");rb.textContent="Komentáře";
     rb.onclick=()=>toggleReviews(s,el,rb);
     drow.appendChild(tr);drow.appendChild(gb);drow.appendChild(rb);
     czOverview(s,el,base);
