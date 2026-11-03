@@ -1,0 +1,1 @@
+{"name":"DABRADAR","short_name":"DABRADAR","description":"Nové filmy a seriály na streamovacích službách a to, jestli mají český dabing","start_url":"./","scope":"./","display":"standalone","background_color":"#16212b","theme_color":"#16212b","lang":"cs","icons":[{"src":"icon.svg","sizes":"any","type":"image/svg+xml","purpose":"any"}]}
