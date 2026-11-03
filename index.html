@@ -788,6 +788,8 @@ async function copyTxt(t,btn){
 }
 async function showStreams(box,kind,id,btn){
   if(!box.hidden){box.hidden=true;return}
+  const card=box.closest(".item");
+  if(card&&card._stBox===box)closeTabs(card,box);
   box.hidden=false;
   if(!addons.length){box.textContent="Nejdřív přidej doplňky Stremia v Nastavení, Televize.";return}
   box.textContent="Načítám streamy…";
@@ -1092,12 +1094,18 @@ async function translateCz(text){
   cset(key,out,30*86400e3);
   return out;
 }
+function closeTabs(el,keep){
+  el._tab=null;
+  el.querySelectorAll(".trl-box,.gal,.rev").forEach(x=>x.remove());
+  [el._stBox,el._subMenu].forEach(x=>{if(x&&x!==keep)x.hidden=true});
+  el.querySelectorAll(".det .row button[aria-expanded]").forEach(b=>b.setAttribute("aria-expanded","false"));
+}
 async function toggleReviews(s,el,btn){
   const old=el.querySelector(".rev");
   if(old){old.remove();return}
   if(!tk.id){toast("Pro komentáře z Traktu zadej v Nastavení, Trakt své Client ID (přihlášení není nutné).");return}
   if(!s.imdbId){toast("K tomuto titulu nemám IMDb číslo, komentáře z Traktu nejdou načíst.");return}
-  el.querySelectorAll(".trl-box,.gal").forEach(x=>x.remove());
+  closeTabs(el);const my=el._tab={};
   btn.textContent="Načítám…";
   try{
     const kind=(s.showType==="series"||type==="series")?"shows":"movies";
@@ -1153,6 +1161,7 @@ async function toggleReviews(s,el,btn){
       it.appendChild(row);
       box.appendChild(it);
     });
+    if(el._tab!==my){btn.textContent="Komentáře";return}
     el.querySelector(".media").prepend(box);
   }catch(e){btn.textContent="Komentáře";toast("Komentáře z Traktu se nepodařilo načíst. Zkontroluj Client ID v Nastavení nebo to zkus později.");return}
   btn.textContent="Komentáře";
@@ -1161,7 +1170,7 @@ async function toggleGallery(s,el,btn){
   const old=el.querySelector(".gal");
   if(old){old.remove();return}
   if(!TM){openPanel("#tm");return}
-  el.querySelectorAll(".trl-box,.rev").forEach(x=>x.remove());
+  closeTabs(el);const my=el._tab={};
   btn.textContent="Načítám…";
   try{
     const d=await tmGet(s.tmdbId+"/images",{include_image_language:"cs,en,null"});
@@ -1175,6 +1184,7 @@ async function toggleGallery(s,el,btn){
       a.onclick=e=>{e.preventDefault();openLb([...g.querySelectorAll("a")].map(x=>x.href),[...g.querySelectorAll("a")].indexOf(a))};
     });
     if(!imgs.length)g.textContent="Žádné fotky nejsou k dispozici.";
+    if(el._tab!==my){btn.textContent="Galerie";return}
     el.querySelector(".media").appendChild(g);
   }catch(e){btn.textContent="Galerie nejde načíst";return}
   btn.textContent="Galerie";
@@ -1183,7 +1193,7 @@ async function toggleTrailer(s,el,btn){
   const old=el.querySelector(".trl-box");
   if(old){old.remove();return}
   if(!TM){openPanel("#tm");return}
-  el.querySelectorAll(".gal,.rev").forEach(x=>x.remove());
+  closeTabs(el);const my=el._tab={};
   btn.textContent="Načítám…";
   try{
     let key=null;
@@ -1211,6 +1221,7 @@ async function toggleTrailer(s,el,btn){
         t.appendChild(im);t.appendChild(pl);box.appendChild(t);
       }
     }
+    if(el._tab!==my){btn.textContent="Trailer";return}
     el.querySelector(".media").prepend(box);
   }catch(e){btn.textContent="Trailer nejde načíst"}
 }
@@ -1448,23 +1459,14 @@ function render(s,i){
   if(s.imdbId){
     const t=(s.showType==="series"||type==="series")?"series":"movie";
     const tail=t==="movie"?"/"+s.imdbId:"";
-    const app=document.createElement("a");
-    app.href="stremio:///detail/"+t+"/"+s.imdbId+tail;
-    app.textContent="Otevřít v aplikaci";
-    const web=document.createElement("a");
-    web.href="https://web.stremio.com/#/detail/"+t+"/"+s.imdbId+tail;
-    web.target="_blank";web.rel="noopener";
-    web.textContent="Otevřít na webu";
-    const stMenu=document.createElement("div");stMenu.className="stmenu";stMenu.hidden=true;
-    stMenu.appendChild(app);stMenu.appendChild(web);
+    const appLink="stremio:///detail/"+t+"/"+s.imdbId+tail;
     const stb=document.createElement("button");stb.className="stb";stb.textContent="Stremio";
-    stb.setAttribute("aria-expanded","false");
-    stb.onclick=()=>{stMenu.hidden=!stMenu.hidden;stb.setAttribute("aria-expanded",String(!stMenu.hidden))};
+    stb.onclick=()=>{location.href=appLink};
     play.appendChild(stb);
     const tvb=document.createElement("button");tvb.className="tvb";tvb.textContent="Pustit na TV";
     const tvBox=document.createElement("pre");tvBox.className="tvcmd";tvBox.hidden=true;
     tvb.onclick=()=>tvShow(s,tvBox,tvb);
-    play.appendChild(tvb);play.after(stMenu);stMenu.after(tvBox);
+    play.appendChild(tvb);play.after(tvBox);
     const wl=document.createElement("button");wl.className="tkb wl";wl.dataset.kind="watchlist";wl.dataset.imdb=s.imdbId;
     wl.onclick=()=>pickList(s,wl);
     const hs=document.createElement("button");hs.className="tkb seen";hs.dataset.kind="history";hs.dataset.imdb=s.imdbId;
@@ -1506,7 +1508,7 @@ function render(s,i){
       if(isTvS){const n=nextEp(s);showStreams(stBox,"series",s.imdbId+":"+n.sn+":"+n.ep,sbt)}
       else showStreams(stBox,"movie",s.imdbId,sbt);
     };
-    drow.appendChild(sbt);
+    drow.prepend(sbt);
   }
   const subMenu=document.createElement("div");subMenu.className="stmenu submenu";subMenu.hidden=true;
   const sq=encodeURIComponent(s.title),yr=s.releaseYear||s.firstAirYear||"";
@@ -1516,13 +1518,13 @@ function render(s,i){
    ["Edna.cz","https://www.google.com/search?q="+encodeURIComponent("site:edna.cz "+s.title+" "+yr)]].forEach(([n,u])=>{
     const a=document.createElement("a");a.href=u;a.target="_blank";a.rel="noopener";a.textContent=n;subMenu.appendChild(a);
   });
-  const sb=document.createElement("button");sb.textContent="České titulky";sb.setAttribute("aria-expanded","false");
-  sb.onclick=()=>{subMenu.hidden=!subMenu.hidden;sb.setAttribute("aria-expanded",String(!subMenu.hidden))};
-  drow.appendChild(sb);
+  const sb=document.createElement("button");sb.textContent="Titulky";sb.setAttribute("aria-expanded","false");
+  sb.onclick=()=>{if(subMenu.hidden)closeTabs(el,subMenu);subMenu.hidden=!subMenu.hidden;sb.setAttribute("aria-expanded",String(!subMenu.hidden))};
+  drow.insertBefore(sb,cs);
   const media=document.createElement("div");media.className="media";
   const isSeriesCard=!!s.tmdbId&&(String(s.tmdbId).startsWith("tv/")||s.showType==="series"||type==="series");
   const tree=document.createElement("div");tree.className="tree";
-  det.appendChild(drow);det.appendChild(subMenu);det.appendChild(stBox);
+  det.appendChild(drow);det.appendChild(subMenu);det.appendChild(stBox);el._stBox=stBox;el._subMenu=subMenu;
   if(isSeriesCard)det.appendChild(tree);
   det.appendChild(media);
   el.appendChild(det);
