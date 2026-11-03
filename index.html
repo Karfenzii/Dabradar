@@ -234,7 +234,10 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <div id="tkMsg" style="margin-top:8px"></div>
 </div>
 <div id="tv" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
-  <p style="margin:0 0 4px;color:var(--mute)">Adresa televize pro Bezdrátové ladění: IP adresa a připojovací port z obrazovky Bezdrátové ladění na TV, například 192.168.1.50:37215.</p>
+  <p style="margin:0 0 4px;color:var(--mute)">Aplikace DABRADAR TV: vlož řádek, který ukazuje aplikace na televizi, například 192.168.0.72:8765/123456. Tlačítko Pustit na TV pak otevře Stremio na TV samo, bez Termuxu.</p>
+  <input id="tvHttpIn" placeholder="192.168.0.72:8765/123456" autocomplete="off" inputmode="url" style="width:100%;margin:6px 0">
+  <button id="tvHttpSave">Uložit adresu aplikace</button><span id="tvHttpMsg" style="margin-left:8px"></span>
+  <p style="margin:14px 0 4px;color:var(--mute)">Adresa televize pro Bezdrátové ladění (starý postup přes Termux): IP adresa a připojovací port z obrazovky Bezdrátové ladění na TV, například 192.168.1.50:37215.</p>
   <input id="tvIn" placeholder="192.168.1.50:37215" autocomplete="off" inputmode="url" style="width:100%;margin:6px 0">
   <button id="tvSave">Uložit adresu</button><span id="tvMsg" style="margin-left:8px"></span>
   <p style="margin:10px 0 4px;color:var(--mute)">Volitelně: v Termuxu jednou vložte skript a stránka pak bude kopírovat jen krátký příkaz <code>tv adresa odkaz</code>.</p>
@@ -744,6 +747,7 @@ const saveState=()=>ls(false,"tkState",JSON.stringify({wl:[...tkWl],seen:[...tkS
 let toastTimer;
 function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>{t.hidden=true},4500)}
 let tvAddr=ls(true,"tvAddr")||"";
+let tvHttp=ls(true,"tvHttp")||"";
 const tkSets=()=>({watchlist:tkWl,history:tkSeen});
 function tkGet(path){
   return fetch("https://api.trakt.tv"+path,{headers:{"trakt-api-version":"2","trakt-api-key":tk.id||"",Authorization:"Bearer "+tk.token}});
@@ -1291,7 +1295,13 @@ function renderEpisodes(s,sn,eps,body,meta){
   });
 }
 async function tvRun(link,box,btn){
-  if(!tvAddr){if(await openPanel("#tv"))$("#tvIn").value="";return}
+  if(tvHttp){
+    const w=window.open("http://"+tvHttp+"?u="+encodeURIComponent(link),"_blank");
+    const label=btn.dataset.label||(btn.dataset.label=btn.textContent);
+    btn.textContent=w?"Odesláno":"Povol vyskakovací okna";setTimeout(()=>{btn.textContent=label},2000);
+    return;
+  }
+  if(!tvAddr){if(await openPanel("#tv")){$("#tvIn").value="";$("#tvHttpIn").value=tvHttp}return}
   const cmd=tvShortOn?"tv "+tvAddr+" '"+link+"'":"adb connect "+tvAddr+"\nadb -s "+tvAddr+" shell am start -a android.intent.action.VIEW -d \""+link+"\" com.stremio.one";
   const label=btn.dataset.label||(btn.dataset.label=btn.textContent);
   box.textContent=cmd;box.hidden=false;
@@ -1431,7 +1441,12 @@ $("#tmSave").onclick=()=>{const v=$("#tmKey").value.trim();if(!v)return;TM=v;ls(
 $("#tkBtn").onclick=()=>{const b=$("#tk");b.style.display=b.style.display==="block"?"none":"block";$("#tkId").value=tk.id||"";$("#tkRedir").value=tk.redir||"http://localhost:5173/callback"};
 $("#tkGo").onclick=tkConnect;
 $("#tkFin").onclick=tkFinish;
-$("#tvBtn").onclick=()=>{const b=$("#tv");b.style.display=b.style.display==="block"?"none":"block";$("#tvIn").value=tvAddr};
+$("#tvBtn").onclick=()=>{const b=$("#tv");b.style.display=b.style.display==="block"?"none":"block";$("#tvIn").value=tvAddr;$("#tvHttpIn").value=tvHttp};
+$("#tvHttpSave").onclick=()=>{
+  const v=$("#tvHttpIn").value.trim();
+  if(v&&!/^[A-Za-z0-9.\-]+:\d{2,5}\/\d{4,8}$/.test(v)){$("#tvHttpMsg").textContent="Zadej ve tvaru IP:port/kód.";return}
+  tvHttp=v;ls(false,"tvHttp",v);$("#tvHttpMsg").textContent=v?"Uloženo.":"Smazáno.";
+};
 $("#tvSave").onclick=()=>{
   const v=$("#tvIn").value.trim();
   if(!/^[A-Za-z0-9.\-]+:\d{2,5}$/.test(v)){$("#tvMsg").textContent="Zadejte ve tvaru IP:port.";return}

@@ -1,0 +1,33 @@
+name: Build DABRADAR TV
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - "tv-app/**"
+      - ".github/workflows/build-tv.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Build APK
+        run: gradle -p tv-app assembleDebug --no-daemon
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp tv-app/app/build/outputs/apk/debug/app-debug.apk dabradar-tv.apk
+          gh release delete tv-latest --yes --cleanup-tag || true
+          gh release create tv-latest dabradar-tv.apk --title "DABRADAR TV" --notes "Aplikace pro televizi. Stáhni dabradar-tv.apk."
