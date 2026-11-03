@@ -222,13 +222,12 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <button id="fReset">Zrušit filtry</button>
 </div>
 <div class="bar" id="settings" hidden>
-  <button id="chg">Změnit klíč</button>
+  <button id="chg">DAB API</button>
   <button id="tkBtn">Trakt</button>
-  <button id="tmBtn">Čeština a galerie</button>
+  <button id="tmBtn">TMDB API</button>
   <button id="tvBtn">Televize</button>
   <button id="expBtn">Zkopírovat nastavení</button>
   <button id="impBtn">Vložit nastavení</button>
-  <button id="syncBtn">Synchronizovat Trakt</button>
   <button id="clr">Vymazat mezipaměť</button>
 </div>
 <div id="tm" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
@@ -245,6 +244,7 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
     <input id="tkUrl" placeholder="Sem vložte adresu, na kterou vás Trakt přesměruje" autocomplete="off" style="width:100%;margin:6px 0">
     <button id="tkFin">2. Dokončit připojení</button>
   </div>
+  <div style="margin-top:10px"><button id="syncBtn">Synchronizovat Trakt</button></div>
   <div id="tkMsg" style="margin-top:8px"></div>
 </div>
 <div id="tv" style="display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px">
@@ -1559,7 +1559,7 @@ function render(s,i){
   const toggleCard=()=>{
     det.hidden=!det.hidden;tb.setAttribute("aria-expanded",String(!det.hidden));
     if(!det.hidden&&isSeriesCard&&!tree.dataset.done){
-      if(!TM){tree.textContent="Seznam sérií a dílů potřebuje klíč TMDB (Nastavení, Čeština a galerie).";return}
+      if(!TM){tree.textContent="Seznam sérií a dílů potřebuje klíč TMDB (Nastavení, TMDB API).";return}
       tree.dataset.done="1";loadSeasons(s,tree);
     }
   };
@@ -1792,7 +1792,7 @@ async function dubCheck(){
   }catch(e){}
 }
 if(tk.token)tkSync().then(dubCheck);else dubCheck();
-if(KEY){load(true)}else{$("#msg").textContent="Nejdřív zadejte klíč: Nastavení, Změnit klíč."}
+if(KEY){load(true)}else{$("#msg").textContent="Nejdřív zadejte klíč: Nastavení, DAB API."}
 </script>
 </body>
 </html>
