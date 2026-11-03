@@ -69,9 +69,10 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 .rev-item{border-top:1px solid var(--line);padding:10px 0}
 .rev-h{font-weight:600;color:var(--tonalt)}
 .rev-item p{margin:4px 0;color:var(--ink)}
-.rev-item a{font-size:.92rem}
 .rev-act{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
-.rev-act button{padding:6px 12px;min-height:36px}
+.rev-act button,.rev-act a{display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:6px 14px;border-radius:10px;font-weight:600;font-size:.92rem;line-height:1.2;text-decoration:none;background:var(--tonal);color:var(--tonalt);border:1px solid var(--tonalb)}
+.rev-act a::after{content:"↗";font-size:1rem}
+.rev-act button:disabled{opacity:.6}
 .rev-note{color:var(--mute);flex-basis:100%}
 .trl-box{width:75%;margin:20px auto 10px}
 .trl-box .trl-thumb{margin:0}
