@@ -793,6 +793,14 @@ async function showStreams(box,kind,id,btn){
   box.textContent="Načítám streamy…";
   const {list,errs}=await fetchStreams(kind,id);
   box.textContent="";
+  const txt=x=>[x.name,x.title,x.description].filter(Boolean).join(" ");
+  const isCzS=x=>/(^|[^a-z])(cz|cs|cze|czech|dabing|dab|cesk|česk|cztit|cz-?dub)([^a-z]|$)|🇨🇿/i.test(txt(x));
+  const sizeOf=x=>{
+    const bh=x.behaviorHints&&+x.behaviorHints.videoSize;if(bh>0)return bh;
+    const m=txt(x).match(/(\d+(?:[.,]\d+)?)\s*(TB|GB|MB|KB)/i);if(!m)return 0;
+    return parseFloat(m[1].replace(",","."))*({KB:1e3,MB:1e6,GB:1e9,TB:1e12}[m[2].toUpperCase()]);
+  };
+  list.sort((a,b)=>(isCzS(b)-isCzS(a))||(sizeOf(b)-sizeOf(a)));
   list.forEach(x=>{
     const row=document.createElement("div");row.className="stm";
     const tx=document.createElement("span");
