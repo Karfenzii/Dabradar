@@ -810,7 +810,14 @@ async function showStreams(box,kind,id,btn){
     if(x.url&&/^https?:\/\//i.test(x.url)){
       const tv=document.createElement("button");tv.textContent="TV";tv.className="tvb";tv.onclick=()=>streamToTv(x.url);
       const cp=document.createElement("button");cp.textContent="Kopírovat";cp.onclick=()=>copyTxt(x.url,cp);
-      row.appendChild(tv);row.appendChild(cp);
+      const st=document.createElement("a");st.className="epst";st.textContent="Stremio";st.title="Pustit tento stream ve Stremiu v tomto zařízení";
+      try{
+        const o={url:x.url};if(x.name)o.name=x.name;if(x.behaviorHints)o.behaviorHints=x.behaviorHints;
+        st.href="stremio:///player/"+encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(o)))));
+      }catch(e){}
+      const pl=document.createElement("a");pl.textContent="Přehrávač";pl.title="Otevřít v přehrávači v tomto zařízení (např. VLC, MX Player)";
+      pl.href="intent://"+x.url.replace(/^https?:\/\//i,"")+"#Intent;scheme="+(/^https:/i.test(x.url)?"https":"http")+";action=android.intent.action.VIEW;type=video/*;end";
+      row.appendChild(tv);row.appendChild(st);row.appendChild(pl);row.appendChild(cp);
     }else if(x.infoHash){
       const cp=document.createElement("button");cp.textContent="Kopírovat magnet";cp.onclick=()=>copyTxt("magnet:?xt=urn:btih:"+x.infoHash,cp);
       row.appendChild(cp);
