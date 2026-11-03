@@ -73,6 +73,8 @@ public class ReceiverService extends Service {
         BufferedReader r = new BufferedReader(new InputStreamReader(s.getInputStream(), StandardCharsets.UTF_8));
         String line = r.readLine();
         if (line == null) return;
+        String h;
+        while ((h = r.readLine()) != null && !h.isEmpty()) { /* přečíst hlavičky */ }
         String[] parts = line.split(" ");
         String status = "200 OK";
         String msg;
@@ -104,6 +106,7 @@ public class ReceiverService extends Service {
         o.write(("HTTP/1.1 " + status + "\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n").getBytes(StandardCharsets.UTF_8));
         o.write(body);
         o.flush();
+        s.shutdownOutput();
     }
 
     private boolean open(String link) {
