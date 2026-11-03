@@ -803,7 +803,10 @@ async function showStreams(box,kind,id,btn){
     return parseFloat(m[1].replace(",","."))*({KB:1e3,MB:1e6,GB:1e9,TB:1e12}[m[2].toUpperCase()]);
   };
   list.sort((a,b)=>(isCzS(b)-isCzS(a))||(sizeOf(b)-sizeOf(a)));
-  list.forEach(x=>{
+  const resOf=x=>{const t=txt(x);return /2160|4k|uhd/i.test(t)?2160:/1440|2k/i.test(t)?1440:/1080|fhd|full ?hd/i.test(t)?1080:/720/i.test(t)?720:/480|sd\b/i.test(t)?480:0};
+  const okS=x=>isCzS(x)&&resOf(x)>=1080&&sizeOf(x)>=1e9&&sizeOf(x)<=10e9;
+  let showAll=false;
+  const renderRow=x=>{
     const row=document.createElement("div");row.className="stm";
     const tx=document.createElement("span");
     tx.textContent=[x.name,x.title||x.description].filter(Boolean).join(" · ").replace(/\s*\n\s*/g," | ").slice(0,220)||"Stream";
@@ -827,9 +830,20 @@ async function showStreams(box,kind,id,btn){
       const a=document.createElement("a");a.href=x.externalUrl;a.target="_blank";a.rel="noopener";a.textContent="Otevřít";row.appendChild(a);
     }
     box.appendChild(row);
-  });
-  if(!list.length){const d=document.createElement("div");d.textContent="Žádné streamy nenalezeny.";box.appendChild(d)}
-  if(errs.length){const d=document.createElement("small");d.className="sterr";d.textContent="Nepovedlo se: "+errs.join("; ");box.appendChild(d)}
+  };
+  const draw=()=>{
+    box.textContent="";
+    const items=showAll?list:list.filter(okS);
+    items.forEach(renderRow);
+    const hid=list.length-list.filter(okS).length;
+    if(!items.length){const d=document.createElement("div");d.textContent=list.length?"Žádný stream s českým dabingem, 1080p a víc a velikostí 1 až 10 GB.":"Žádné streamy nenalezeny.";box.appendChild(d)}
+    if(list.length&&(hid>0||showAll)){
+      const b=document.createElement("button");b.textContent=showAll?"Jen vyhovující filtru":"Zobrazit všechny ("+hid+" skrytých)";
+      b.onclick=()=>{showAll=!showAll;draw()};box.appendChild(b);
+    }
+    if(errs.length){const d=document.createElement("small");d.className="sterr";d.textContent="Nepovedlo se: "+errs.join("; ");box.appendChild(d)}
+  };
+  draw();
 }
 const tkSets=()=>({watchlist:tkWl,history:tkSeen});
 function tkGet(path){
