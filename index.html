@@ -616,7 +616,7 @@ async function loadActor(reset){
 async function load(reset){
   if(loading||!KEY)return;
   if(listMode==="actor")return loadActor(reset);
-  if(listMode==="watchlist")return loadWatchlist(reset);
+  if(listMode==="watchlist")return String($("#lsSel").value).startsWith("cat|")?loadCatalog(reset):loadWatchlist(reset);
   loading=true;updFiltBtn();
   if(reset){cursor=undefined;$("#list").innerHTML="";}
   $("#msg").textContent="Načítám…";$("#more").hidden=true;
@@ -1017,6 +1017,7 @@ async function seasonToggle(imdb,sn,nums,btn){
 let TM=ls(true,"tmdbKey")||"";
 function slimTm(path,j){
   if(path.endsWith("/reviews"))return{results:(j.results||[]).map(x=>({author:(x.author_details&&x.author_details.name)||x.author||"",rating:x.author_details&&x.author_details.rating,content:(x.content||"").slice(0,1500),url:x.url,date:x.created_at}))};
+  if(path.startsWith("find/"))return{movie:((j.movie_results||[])[0]||{}).id||null,tv:((j.tv_results||[])[0]||{}).id||null};
   if(path.startsWith("search/"))return{results:(j.results||[]).slice(0,8).map(x=>({id:x.id,title:x.title||x.name,original:x.original_title||x.original_name,date:x.release_date||x.first_air_date}))};
   if(path.endsWith("/images"))return{backdrops:(j.backdrops||[]).slice(0,12).map(x=>({file_path:x.file_path})),posters:(j.posters||[]).slice(0,12).map(x=>({file_path:x.file_path}))};
   if(path.endsWith("/videos"))return{results:(j.results||[]).filter(v=>v.site==="YouTube").map(v=>({site:v.site,type:v.type,official:v.official,key:v.key}))};
@@ -1040,7 +1041,7 @@ async function tmGet(path,params){
   const r=await fetch(u);
   if(!r.ok)throw new Error("TMDB "+r.status);
   const v=slimTm(path,await r.json());
-  cset(key,v,/(credits|providers)$/.test(path)?7*86400e3:/\/season\/\d+$/.test(path)?12*3600e3:/\/(images|videos)$/.test(path)?7*86400e3:24*3600e3);
+  cset(key,v,/(credits|providers)$|^find\//.test(path)?7*86400e3:/\/season\/\d+$/.test(path)?12*3600e3:/\/(images|videos)$/.test(path)?7*86400e3:24*3600e3);
   return v;
 }
 function fmtMin(m){m=Math.round(m);const h=Math.floor(m/60),r=m%60;return h?(r?h+" h "+r+" min":h+" h"):r+" min"}
@@ -1490,14 +1491,14 @@ function render(s,i){
   el.querySelector("h2").appendChild(tb);
   el.querySelector(".ov").textContent=s.overview||"";
   const base=infoFromSA(s);setInfo(el,base.time,base.genres,base.extra);paintSerSum(el);
-  el.querySelector(".dub").textContent=(i.dubbed.length?"Český dabing: ano ("+i.dubbed.join(", ")+")":"Český dabing: u služeb v ČR nenalezen")+(i.subs.length?" · České titulky: "+i.subs.join(", "):"");
+  el.querySelector(".dub").textContent=s._cat?"Český dabing: podle katalogu doplňku":(i.dubbed.length?"Český dabing: ano ("+i.dubbed.join(", ")+")":"Český dabing: u služeb v ČR nenalezen")+(i.subs.length?" · České titulky: "+i.subs.join(", "):"");
   const bd=el.querySelector(".badges");
   const addB=(t,c)=>{const b=document.createElement("span");b.className="badge "+(c||"");b.textContent=t;bd.appendChild(b)};
   if(s.imdbId&&dubNew[s.imdbId]&&Date.now()-dubNew[s.imdbId]<14*864e5&&i.dubbed.length)addB("Nově dabováno","dubnew");
   if(i.since&&Date.now()/1000-i.since<7*86400)addB("Nově na službě");
   el.querySelector(".svc").textContent=i.all.length?"Dostupné na: "+i.all.join(", "):"";
   const play=el.querySelector(".play");
-  if(s.imdbId&&addons.length){
+  if(s.imdbId&&addons.length&&!s._cat){
     const wb=document.createElement("button");wb.className="wsb";wb.textContent="Dabing v doplňcích?";wb.title="Zkontroluje, jestli doplňky Stremia nabízejí stream s českým dabingem";
     wb.onclick=()=>wsCheck(s,el.querySelector(".dub"),wb);
     el.querySelector(".dub").after(wb);
@@ -1678,6 +1679,63 @@ async function pickList(s,btn){
   }catch(e){msg.textContent="Vlastní seznamy se nepodařilo načíst."}
 }
 $("#lsClose").onclick=()=>$("#lsDlg").close();
+async function loadCatEntries(){
+  const sel=$("#lsSel");
+  [...sel.options].filter(o=>o.value.startsWith("cat|")).forEach(o=>o.remove());
+  for(let ai=0;ai<addons.length;ai++){
+    try{
+      const b=addonBase(addons[ai]),q=addonQuery(addons[ai]);
+      const ck="am:"+b+q;let m=cget(ck);
+      if(!m){
+        const r=await fetch(b+"/manifest.json"+q);if(!r.ok)throw new Error("HTTP "+r.status);
+        const j=await r.json();
+        m={name:j.name||"",catalogs:(j.catalogs||[]).map(c=>({id:c.id,type:c.type,name:c.name,req:(c.extra||[]).some(e=>e.isRequired)}))};
+        cset(ck,m,3600e3);
+      }
+      m.catalogs.filter(c=>(c.type==="movie"||c.type==="series")&&!c.req).forEach(c=>{
+        const o=new Option("Katalog: "+(c.name||c.id)+(c.type==="series"?" (seriály)":" (filmy)"),"cat|"+ai+"|"+c.type+"|"+c.id);
+        sel.add(o);
+      });
+    }catch(e){}
+  }
+}
+let catSkip=0;
+async function loadCatalog(reset){
+  const sel=$("#lsSel"),v=String(sel.value).split("|"),ai=+v[1],ctype=v[2],cid=v.slice(3).join("|");
+  if(ctype!==type){
+    const opt=[...sel.options].find(o=>o.value.startsWith("cat|"+ai+"|"+type+"|"))||[...sel.options].find(o=>o.value.startsWith("cat|")&&o.value.split("|")[2]===type);
+    if(!opt){$("#list").innerHTML="";$("#more").hidden=true;$("#msg").textContent="Pro "+(type==="series"?"seriály":"filmy")+" nemá doplněk žádný katalog.";return}
+    sel.value=opt.value;return loadCatalog(reset);
+  }
+  loading=true;updFiltBtn();
+  if(reset){catSkip=0;$("#list").innerHTML=""}
+  $("#msg").textContent="Načítám katalog…";$("#more").hidden=true;
+  try{
+    if(!client&&KEY)await setup().catch(()=>{});
+    const b=addonBase(addons[ai]),q=addonQuery(addons[ai]);
+    const r=await fetch(b+"/catalog/"+ctype+"/"+encodeURIComponent(cid)+(catSkip?"/skip="+catSkip:"")+".json"+q);
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const metas=((await r.json()).metas)||[];
+    catSkip+=metas.length;
+    const seen=new Set([...document.querySelectorAll("#list .item")].map(e=>e.dataset.imdb));
+    const shows=metas.filter(x=>x&&x.name&&!seen.has(x.id)).map(x=>({
+      title:x.name,imdbId:/^tt\d+$/.test(x.id||"")?x.id:"",tmdbId:null,showType:ctype==="series"?"series":"movie",
+      releaseYear:parseInt(x.year||x.releaseInfo)||undefined,overview:x.description||"",
+      genres:(x.genres||[]).map(g=>({name:g})),imageSet:{verticalPoster:{w240:x.poster,w360:x.poster}},streamingOptions:{cz:[]},_cat:true
+    }));
+    if(TM){
+      let idx=0;
+      const w=async()=>{while(idx<shows.length){const s=shows[idx++];if(!s.imdbId)continue;
+        try{const f=await tmGet("find/"+s.imdbId,{external_source:"imdb_id"});const id=ctype==="series"?f.tv:f.movie;if(id)s.tmdbId=(ctype==="series"?"tv/":"movie/")+id}catch(e){}}};
+      await Promise.all([w(),w(),w(),w(),w(),w()]);
+    }
+    shows.forEach(s=>render(s,{dubbed:["katalog"],subs:[],since:0,all:[],links:{}}));
+    more=metas.length>0;
+    $("#msg").textContent=shows.length||$("#list").children.length?"":"Katalog je prázdný.";
+    $("#more").hidden=!more;
+  }catch(e){$("#msg").textContent="Katalog se nepodařilo načíst: "+(e&&e.message||e)}
+  loading=false;
+}
 async function loadLists(){
   const sel=$("#lsSel");
   sel.length=0;sel.add(new Option("Watchlist","watchlist"));sel.add(new Option("Rozkoukané seriály","__progress"));
@@ -1694,9 +1752,17 @@ $("#tWl").onclick=async e=>{
   e.currentTarget.setAttribute("aria-pressed",String(on));
   $("#lsBar").hidden=!on;
   if(on&&$("#lsSel").length<2)await loadLists();
+  if(on&&addons.length){
+    const cur=$("#lsSel").value;
+    await loadCatEntries();
+    const last=ls(true,"lsLast");
+    if(last&&[...$("#lsSel").options].some(o=>o.value===last))$("#lsSel").value=last;
+    else if(!tk.token){const o=[...$("#lsSel").options].find(o=>o.value.startsWith("cat|"));if(o)$("#lsSel").value=o.value}
+    else if(cur)$("#lsSel").value=cur;
+  }
   load(true);
 };
-$("#lsSel").onchange=()=>{if($("#lsSel").value==="__progress"&&type!=="series")setType("series");else load(true)};
+$("#lsSel").onchange=()=>{ls(false,"lsLast",$("#lsSel").value);const cv=String($("#lsSel").value);if(cv.startsWith("cat|")){const t=cv.split("|")[2];if(t!==type){setType(t);return}load(true);return}if($("#lsSel").value==="__progress"&&type!=="series")setType("series");else load(true)};
 let lbList=[],lbI=0;
 function lbShow(i){
   const n=lbList.length;lbI=(i+n)%n;
