@@ -1748,10 +1748,20 @@ async function loadCatalog(reset,selEl){
     if(TM){
       let idx=0;
       const w=async()=>{while(idx<shows.length){const s=shows[idx++];if(!s.imdbId)continue;
-        try{const f=await tmGet("find/"+s.imdbId,{external_source:"imdb_id"});const id=ctype==="series"?f.tv:f.movie;if(id)s.tmdbId=(ctype==="series"?"tv/":"movie/")+id}catch(e){}}};
+        try{const f=await tmGet("find/"+s.imdbId,{external_source:"imdb_id"});const id=ctype==="series"?f.tv:f.movie;if(id)s.tmdbId=(ctype==="series"?"tv/":"movie/")+id}catch(e){}
+        if(s.tmdbId){try{const d=await tmGet(s.tmdbId,{language:"cs-CZ"});s._rd=d.release_date||d.first_air_date||""}catch(e){}}}};
       await Promise.all([w(),w(),w(),w(),w(),w()]);
     }
-    shows.forEach(s=>render(s,{dubbed:["katalog"],subs:[],since:0,all:[],links:{}}));
+    shows.forEach(s=>{
+      render(s,{dubbed:["katalog"],subs:[],since:0,all:[],links:{}});
+      const el=$("#list").lastElementChild;
+      if(el)el._date=s._rd||((s.releaseYear||0)+"-01-01");
+    });
+    if(!$("#sortSel").value){
+      const box=$("#list"),items=[...box.children].filter(e=>e.classList.contains("item"));
+      items.sort((a,b)=>(b._date||"").localeCompare(a._date||""));
+      items.forEach(e=>box.appendChild(e));
+    }
     more=metas.length>0;
     $("#msg").textContent=shows.length||$("#list").children.length?"":"Katalog je prázdný.";
     $("#more").hidden=!more;
