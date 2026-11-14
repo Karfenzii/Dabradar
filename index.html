@@ -1686,18 +1686,18 @@ async function loadCatEntries(){
   for(let ai=0;ai<addons.length;ai++){
     try{
       const b=addonBase(addons[ai]),q=addonQuery(addons[ai]);
-      const ck="am:"+b+q;let m=cget(ck);
+      const ck="am2:"+b+q;let m=cget(ck);
       if(!m){
         const r=await fetch(b+"/manifest.json"+q);if(!r.ok)throw new Error("HTTP "+r.status);
         const j=await r.json();
-        m={name:j.name||"",catalogs:(j.catalogs||[]).map(c=>({id:c.id,type:c.type,name:c.name,req:(c.extra||[]).some(e=>e.isRequired)}))};
+        m={name:j.name||"",res:(j.resources||[]).map(x=>typeof x==="string"?x:(x&&x.name)||"?").join(","),types:(j.types||[]).join(","),catalogs:(j.catalogs||[]).map(c=>({id:c.id,type:c.type,name:c.name,req:(c.extra||[]).some(e=>e.isRequired)}))};
         cset(ck,m,3600e3);
       }
       m.catalogs.filter(c=>(c.type==="movie"||c.type==="series")&&!c.req).forEach(c=>{
         const o=new Option("Katalog: "+(c.name||c.id)+(c.type==="series"?" (seriály)":" (filmy)"),"cat|"+ai+"|"+c.type+"|"+c.id);
         sel.add(o);n++;
       });
-      if(!m.catalogs.some(c=>(c.type==="movie"||c.type==="series")&&!c.req))errs.push((m.name||addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0])+": nenabízí žádný katalog filmů ani seriálů");
+      if(!m.catalogs.some(c=>(c.type==="movie"||c.type==="series")&&!c.req))errs.push((m.name||addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0])+": nenabízí použitelný katalog [funkce: "+(m.res||"žádné")+"; typy: "+(m.types||"?")+"; katalogů: "+m.catalogs.length+(m.catalogs.length?" → "+m.catalogs.slice(0,8).map(c=>c.type+"/"+(c.name||c.id)+(c.req?" (vyžaduje parametr)":"")).join(", "):"")+"]");
     }catch(e){errs.push(addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0]+": "+(e&&e.message||"chyba"))}
   }
   $("#catMsg").textContent=n?"":(errs.length?"Katalogy z doplňků se nenačetly. "+errs.join("; "):"");
