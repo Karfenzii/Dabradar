@@ -215,6 +215,7 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
 </div>
 <div class="bar" id="lsBar" hidden>
   <select id="lsSel" aria-label="Seznam z Traktu"></select>
+  <div id="catMsg" style="flex:1 1 100%;font-size:.85rem;color:var(--mute)"></div>
 </div>
 <div class="bar" id="flt" hidden>
   <select id="fG" aria-label="Žánr"><option value="">Všechny žánry</option></select>
@@ -1680,7 +1681,7 @@ async function pickList(s,btn){
 }
 $("#lsClose").onclick=()=>$("#lsDlg").close();
 async function loadCatEntries(){
-  const sel=$("#lsSel");
+  const sel=$("#lsSel"),errs=[];let n=0;
   [...sel.options].filter(o=>o.value.startsWith("cat|")).forEach(o=>o.remove());
   for(let ai=0;ai<addons.length;ai++){
     try{
@@ -1694,10 +1695,13 @@ async function loadCatEntries(){
       }
       m.catalogs.filter(c=>(c.type==="movie"||c.type==="series")&&!c.req).forEach(c=>{
         const o=new Option("Katalog: "+(c.name||c.id)+(c.type==="series"?" (seriály)":" (filmy)"),"cat|"+ai+"|"+c.type+"|"+c.id);
-        sel.add(o);
+        sel.add(o);n++;
       });
-    }catch(e){}
+      if(!m.catalogs.some(c=>(c.type==="movie"||c.type==="series")&&!c.req))errs.push((m.name||addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0])+": nenabízí žádný katalog filmů ani seriálů");
+    }catch(e){errs.push(addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0]+": "+(e&&e.message||"chyba"))}
   }
+  $("#catMsg").textContent=n?"":(errs.length?"Katalogy z doplňků se nenačetly. "+errs.join("; "):"");
+  return{n,errs};
 }
 let catSkip=0;
 async function loadCatalog(reset){
@@ -1752,6 +1756,7 @@ $("#tWl").onclick=async e=>{
   e.currentTarget.setAttribute("aria-pressed",String(on));
   $("#lsBar").hidden=!on;
   if(on&&$("#lsSel").length<2)await loadLists();
+  if(on&&!addons.length)$("#catMsg").textContent="Pro katalogy přidej doplněk v Nastavení, TV, Doplňky Stremia.";
   if(on&&addons.length){
     const cur=$("#lsSel").value;
     await loadCatEntries();
