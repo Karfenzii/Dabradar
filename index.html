@@ -213,6 +213,9 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <button id="fBtn" aria-expanded="false" aria-controls="flt" aria-pressed="false">Filtry</button>
   <button id="setBtn" class="thbtn setbtn" aria-expanded="false" aria-controls="settings" aria-label="Nastavení" title="Nastavení"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.4 13a7.6 7.6 0 0 0 0-2l2.1-1.6a.5.5 0 0 0 .1-.6l-2-3.4a.5.5 0 0 0-.6-.2l-2.5 1a7.4 7.4 0 0 0-1.7-1l-.4-2.6a.5.5 0 0 0-.5-.4h-4a.5.5 0 0 0-.5.4l-.4 2.6a7.4 7.4 0 0 0-1.7 1l-2.5-1a.5.5 0 0 0-.6.2l-2 3.4a.5.5 0 0 0 .1.6L4.6 11a7.6 7.6 0 0 0 0 2l-2.1 1.6a.5.5 0 0 0-.1.6l2 3.4c.1.2.4.3.6.2l2.5-1c.5.4 1.1.7 1.7 1l.4 2.6c0 .2.2.4.5.4h4c.3 0 .5-.2.5-.4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.5 1c.2.1.5 0 .6-.2l2-3.4a.5.5 0 0 0-.1-.6zM12 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg></button>
 </div>
+<div class="bar" id="srcBar" hidden>
+  <select id="srcSel" aria-label="Zdroj seznamu" style="flex:1 1 100%"></select>
+</div>
 <div class="bar" id="lsBar" hidden>
   <select id="lsSel" aria-label="Seznam z Traktu"></select>
   <div id="catMsg" style="flex:1 1 100%;font-size:.85rem;color:var(--mute)"></div>
@@ -580,7 +583,7 @@ let actor=null;
 function actorClose(){actor=null;$("#actorBar").hidden=true}
 async function openActor(id,name){
   if(!KEY||!TM){toast("Herci potřebují klíč TMDB.");return}
-  listMode="actor";actor={id,name};
+  listMode="actor";actor={id,name};$("#srcBar").hidden=true;
   $("#tWl").setAttribute("aria-pressed","false");$("#lsBar").hidden=true;
   $("#actorTxt").textContent="Další tituly: "+name;$("#actorBar").hidden=false;
   window.scrollTo(0,0);
@@ -617,6 +620,7 @@ async function loadActor(reset){
 async function load(reset){
   if(loading||!KEY)return;
   if(listMode==="actor")return loadActor(reset);
+  if(listMode==="browse"&&!$("#srcBar").hidden&&!$("#q").value.trim()&&String($("#srcSel").value).startsWith("cat|"))return loadCatalog(reset,$("#srcSel"));
   if(listMode==="watchlist")return String($("#lsSel").value).startsWith("cat|")?loadCatalog(reset):loadWatchlist(reset);
   loading=true;updFiltBtn();
   if(reset){cursor=undefined;$("#list").innerHTML="";}
@@ -1600,6 +1604,7 @@ function render(s,i){
 
 function setType(t){
   sugHide();type=t;$("#tMovie").setAttribute("aria-pressed",t==="movie");$("#tTv").setAttribute("aria-pressed",t==="series");
+  paintSrc();
   load(true);
 }
 $("#tMovie").onclick=()=>setType("movie");
@@ -1680,8 +1685,21 @@ async function pickList(s,btn){
   }catch(e){msg.textContent="Vlastní seznamy se nepodařilo načíst."}
 }
 $("#lsClose").onclick=()=>$("#lsDlg").close();
+let catList=[];
+function paintSrc(){
+  const bar=$("#srcBar"),sel=$("#srcSel");
+  const mine=catList.filter(c=>c.type===type);
+  if(!mine.length||listMode!=="browse"){bar.hidden=true;return}
+  const prev=ls(true,"srcPick:"+type);
+  sel.length=0;
+  mine.forEach(c=>sel.add(new Option(c.label,c.v)));
+  sel.add(new Option("Streaming Availability (nové tituly s dabingem)","sa"));
+  const best=(mine.find(c=>/dab|cz/i.test(c.name))||mine[0]).v;
+  sel.value=[...sel.options].some(o=>o.value===prev)?prev:best;
+  bar.hidden=false;
+}
 async function loadCatEntries(){
-  const sel=$("#lsSel"),errs=[];let n=0;
+  const sel=$("#lsSel"),errs=[];let n=0;catList=[];
   [...sel.options].filter(o=>o.value.startsWith("cat|")).forEach(o=>o.remove());
   for(let ai=0;ai<addons.length;ai++){
     try{
@@ -1695,7 +1713,7 @@ async function loadCatEntries(){
       }
       m.catalogs.filter(c=>(c.type==="movie"||c.type==="series")&&!c.req).forEach(c=>{
         const o=new Option("Katalog: "+(c.name||c.id)+(c.type==="series"?" (seriály)":" (filmy)"),"cat|"+ai+"|"+c.type+"|"+c.id);
-        sel.add(o);n++;
+        sel.add(o);n++;catList.push({v:o.value,type:c.type,name:c.name||c.id,label:"Katalog: "+(c.name||c.id)});
       });
       if(!m.catalogs.some(c=>(c.type==="movie"||c.type==="series")&&!c.req))errs.push((m.name||addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0])+": nenabízí použitelný katalog [funkce: "+(m.res||"žádné")+"; typy: "+(m.types||"?")+"; katalogů: "+m.catalogs.length+(m.catalogs.length?" → "+m.catalogs.slice(0,8).map(c=>c.type+"/"+(c.name||c.id)+(c.req?" (vyžaduje parametr)":"")).join(", "):"")+"]");
     }catch(e){errs.push(addonBase(addons[ai]).replace(/^https?:\/\//,"").split("/")[0]+": "+(e&&e.message||"chyba"))}
@@ -1704,12 +1722,12 @@ async function loadCatEntries(){
   return{n,errs};
 }
 let catSkip=0;
-async function loadCatalog(reset){
-  const sel=$("#lsSel"),v=String(sel.value).split("|"),ai=+v[1],ctype=v[2],cid=v.slice(3).join("|");
+async function loadCatalog(reset,selEl){
+  const sel=selEl||$("#lsSel"),v=String(sel.value).split("|"),ai=+v[1],ctype=v[2],cid=v.slice(3).join("|");
   if(ctype!==type){
     const opt=[...sel.options].find(o=>o.value.startsWith("cat|"+ai+"|"+type+"|"))||[...sel.options].find(o=>o.value.startsWith("cat|")&&o.value.split("|")[2]===type);
     if(!opt){$("#list").innerHTML="";$("#more").hidden=true;$("#msg").textContent="Pro "+(type==="series"?"seriály":"filmy")+" nemá doplněk žádný katalog.";return}
-    sel.value=opt.value;return loadCatalog(reset);
+    sel.value=opt.value;return loadCatalog(reset,selEl);
   }
   loading=true;updFiltBtn();
   if(reset){catSkip=0;$("#list").innerHTML=""}
@@ -1753,6 +1771,7 @@ $("#tWl").onclick=async e=>{
   actorClose();
   listMode=listMode==="watchlist"?"browse":"watchlist";
   const on=listMode==="watchlist";
+  paintSrc();
   e.currentTarget.setAttribute("aria-pressed",String(on));
   $("#lsBar").hidden=!on;
   if(on&&$("#lsSel").length<2)await loadLists();
@@ -1858,7 +1877,7 @@ $("#q").addEventListener("keydown",e=>{
 $("#q").addEventListener("input",()=>{picked=null;clearTimeout(sugTimer);sugTimer=setTimeout(sugFetch,300)});
 $("#q").addEventListener("blur",()=>setTimeout(sugHide,200));
 $("#sug").addEventListener("mousedown",e=>e.preventDefault());
-$("#actorX").onclick=()=>{actorClose();listMode="browse";load(true)};
+$("#actorX").onclick=()=>{actorClose();listMode="browse";paintSrc();load(true)};
 $("#newsX").onclick=()=>{ls(false,"newsSeen",String(Date.now()));paintNews()};
 $("#q").addEventListener("search",()=>{if(!$("#q").value)load(true)});
 $("#keyTest").onclick=async()=>{
@@ -1922,7 +1941,11 @@ async function dubCheck(){
   }catch(e){}
 }
 if(tk.token)tkSync().then(dubCheck);else dubCheck();
-if(KEY){load(true)}else{$("#msg").textContent="Nejdřív zadejte klíč: Nastavení, DAB API."}
+$("#srcSel").onchange=()=>{ls(false,"srcPick:"+type,$("#srcSel").value);load(true)};
+(async()=>{
+  if(addons.length){try{await loadCatEntries()}catch(e){}paintSrc()}
+  if(KEY){load(true)}else{$("#msg").textContent="Nejdřív zadejte klíč: Nastavení, DAB API."}
+})();
 </script>
 </body>
 </html>
