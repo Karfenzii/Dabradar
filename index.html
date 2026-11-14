@@ -96,6 +96,7 @@ button[aria-pressed=true]{background:var(--ink);color:var(--bg);border-color:var
 .submenu a{background:var(--card);color:var(--ink);border:1px solid var(--line)}
 .stmenu a{background:var(--purple);color:#fff;text-decoration:none;border-radius:8px;padding:6px 12px;font-weight:600;font-size:.92rem}
 .info{display:flex;flex-wrap:wrap;gap:2px 14px;color:var(--mute);font-size:.92rem;margin-top:2px}
+.wsb{margin:0 0 6px;padding:4px 10px;font-size:.85rem}
 .stlist{margin:8px 0;font-size:.9rem}
 .stm{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 0;border-top:1px solid var(--line)}
 .stm span{flex:1 1 100%;color:var(--ink)}
@@ -200,6 +201,8 @@ footer{color:var(--mute);font-size:.85rem;margin-top:24px}
   <p>Zadejte klíč ke Streaming Availability API (návod: docs.movieofthenight.com, část Authentication). Uloží se jen v tomto prohlížeči.</p>
   <input id="keyIn" placeholder="API klíč" autocomplete="off">
   <button id="keySave">Uložit klíč</button>
+  <button id="keyTest" type="button">Otestovat API</button>
+  <pre id="keyDiag" hidden style="white-space:pre-wrap;font-size:.85rem;margin:8px 0 0"></pre>
 </div>
 
 <div class="bar">
@@ -799,6 +802,21 @@ async function copyTxt(t,btn){
   const old=btn.textContent;
   try{await navigator.clipboard.writeText(t);btn.textContent="Zkopírováno"}catch(e){window.prompt("Zkopíruj:",t)}
   setTimeout(()=>{btn.textContent=old},1800);
+}
+const isCzStream=x=>/(^|[^a-z])(cz|cs|cze|czech|dabing|dab|cesk|česk|cztit|cz-?dub)([^a-z]|$)|🇨🇿/i.test([x.name,x.title,x.description].filter(Boolean).join(" "));
+async function wsCheck(s,dubEl,btn){
+  if(!addons.length){toast("Nejdřív přidej doplňky Stremia v Nastavení, TV.");return}
+  btn.disabled=true;btn.textContent="Hledám…";
+  try{
+    const isTvS=(s.showType==="series"||type==="series"||String(s.tmdbId||"").startsWith("tv/"));
+    const n=isTvS?nextEp(s):null;
+    const {list,errs}=await fetchStreams(isTvS?"series":"movie",isTvS?s.imdbId+":"+n.sn+":"+n.ep:s.imdbId);
+    const cz=list.filter(isCzStream).length;
+    const base=dubEl.textContent.replace(/ · Doplňky:.*$/,"");
+    dubEl.textContent=base+" · Doplňky: "+(cz?cz+" streamů s CZ"+(isTvS?" (díl S"+n.sn+"E"+n.ep+")":""):(list.length?"streamy jsou, ale žádný s CZ":(errs.length?"nepovedlo se načíst":"nic nenalezeno")));
+    btn.textContent="Hledat znovu";
+  }catch(e){btn.textContent="Hledání selhalo"}
+  btn.disabled=false;
 }
 async function showStreams(box,kind,id,btn){
   if(!box.hidden){box.hidden=true;return}
@@ -1479,6 +1497,11 @@ function render(s,i){
   if(i.since&&Date.now()/1000-i.since<7*86400)addB("Nově na službě");
   el.querySelector(".svc").textContent=i.all.length?"Dostupné na: "+i.all.join(", "):"";
   const play=el.querySelector(".play");
+  if(s.imdbId&&addons.length){
+    const wb=document.createElement("button");wb.className="wsb";wb.textContent="Dabing v doplňcích?";wb.title="Zkontroluje, jestli doplňky Stremia nabízejí stream s českým dabingem";
+    wb.onclick=()=>wsCheck(s,el.querySelector(".dub"),wb);
+    el.querySelector(".dub").after(wb);
+  }
   Object.keys(i.links).forEach(n=>{
     const a=document.createElement("a");
     a.href=i.links[n];a.target="_blank";a.rel="noopener";a.textContent="Pustit na "+n;if(svcPri(n)===0)a.className="prim";
@@ -1767,6 +1790,42 @@ $("#sug").addEventListener("mousedown",e=>e.preventDefault());
 $("#actorX").onclick=()=>{actorClose();listMode="browse";load(true)};
 $("#newsX").onclick=()=>{ls(false,"newsSeen",String(Date.now()));paintNews()};
 $("#q").addEventListener("search",()=>{if(!$("#q").value)load(true)});
+$("#keyTest").onclick=async()=>{
+  const out=$("#keyDiag");out.hidden=false;out.textContent="Testuji…";
+  const L=[];
+  try{
+    if(!KEY)throw new Error("Chybí klíč.");
+    if(!client)await setup();
+    if(!catalogs.length)await loadCatalogs();
+    L.push("Služby v ČR: "+(catalogs.join(", ")||"žádné"));
+    const kinds=["movie","series"];
+    for(const kind of kinds){
+      const prm={country:"cz",catalogs:catalogs,showType:kind,orderBy:"release_date",orderDirection:"desc"};
+      let shows,hdr=null,status="";
+      const api=client.showsApi;
+      if(api.searchShowsByFiltersRaw){
+        try{
+          const r=await api.searchShowsByFiltersRaw(prm);
+          status=r.raw.status;hdr=[];r.raw.headers.forEach((v,k)=>{if(/ratelimit|remaining|limit/i.test(k))hdr.push(k+": "+v)});
+          shows=(await r.value()).shows||[];
+        }catch(e){if(e&&e.response)throw e;L.push("(hlavičky limitu se nepodařilo načíst)");shows=null}
+      }
+      if(!shows)shows=((await api.searchShowsByFilters(prm)).shows)||[];
+      L.push("");L.push(kind==="movie"?"FILMY (nejnovější podle API):":"SERIÁLY (nejnovější podle API):");
+      if(status)L.push("HTTP "+status);
+      if(hdr&&hdr.length)L.push(hdr.join(" | "));
+      L.push("Vráceno titulů: "+shows.length);
+      shows.slice(0,10).forEach(x=>{
+        const i=czInfo(x);
+        L.push("• "+x.title+" ("+(x.releaseYear||x.firstAirYear||"?")+") – dabing: "+(i.dubbed.length?"ano ("+i.dubbed.join(", ")+")":"ne")+"; služby: "+(i.all.join(", ")||"žádné"));
+      });
+    }
+  }catch(e){
+    L.push("Chyba: "+(e&&e.message||e));
+    try{if(e&&e.response){L.push("HTTP "+e.response.status);L.push((await e.response.clone().text()).slice(0,300))}}catch(_){}
+  }
+  out.textContent=L.join("\n");
+};
 $("#chg").onclick=()=>{$("#key").style.display="block";$("#keyIn").value=KEY};
 $("#keySave").onclick=()=>{
   const v=$("#keyIn").value.trim();if(!v)return;
